@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { UserCheck, X, ShieldCheck, Sparkles, Fingerprint, Loader, LogIn, AlertTriangle } from 'lucide-react';
+import { X, ShieldCheck, Fingerprint, Loader, AlertTriangle, Cloud, LogIn } from 'lucide-react';
 import { signInWithGoogle } from '../services/firebase';
 
 interface SaveProfileModalProps {
@@ -25,13 +25,11 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
         const msg = (e.message || "").toLowerCase();
         const code = e.code || "";
 
-        // AUTO-FALLBACK FOR PREVIEW ENVIRONMENTS (e.g. AI Studio, StackBlitz)
-        // If domain isn't authorized in Firebase, we allow a local "Mock" login so the user isn't stuck.
+        // AUTO-FALLBACK FOR PREVIEW ENVIRONMENTS
         if (msg.includes("unauthorized-domain") || msg.includes("domain not authorized") || code === "auth/unauthorized-domain") {
              console.warn("Preview environment detected (Domain unauthorized). Enabling Preview Mode.");
              if (onMockLogin) {
                  await onMockLogin(); 
-                 // Do NOT set error, treat as success
                  return;
              }
         }
@@ -63,17 +61,17 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
             <div className="relative w-24 h-24 mx-auto mb-6">
                  <div className="absolute inset-0 bg-teal-100/50 rounded-full animate-pulse"></div>
                  <div className="relative w-full h-full bg-gradient-to-tr from-teal-50 to-white rounded-full flex items-center justify-center shadow-lg shadow-teal-100 border border-teal-100">
-                    <UserCheck size={36} className="text-teal-600" />
+                    <Cloud size={36} className="text-teal-600" />
                  </div>
                  <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center">
                     <Fingerprint size={14} className="text-white" />
                  </div>
             </div>
 
-            <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-3">Create Account</h2>
+            <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-3">Save Skin Profile</h2>
             
             <p className="text-sm text-zinc-500 font-medium leading-relaxed mb-6">
-                Save your skin analysis, sync data across devices, and unlock full cloud backup.
+                Sign in to sync your existing data, or create an account to back up your new analysis.
             </p>
 
             <div className="space-y-3 mb-8 text-left">
@@ -82,8 +80,8 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                         <ShieldCheck size={14} className="text-teal-600" />
                     </div>
                     <div>
-                        <span className="text-xs font-bold text-teal-900 block mb-0.5">Secure Backup</span>
-                        <span className="text-[10px] text-teal-700 font-medium leading-none">Your data follows you everywhere.</span>
+                        <span className="text-xs font-bold text-teal-900 block mb-0.5">Secure Cloud Sync</span>
+                        <span className="text-[10px] text-teal-700 font-medium leading-none">Your skin data follows you everywhere.</span>
                     </div>
                 </div>
             </div>
@@ -102,12 +100,7 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
             >
                 {loading ? <Loader size={16} className="animate-spin" /> : (
                     <>
-                        <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24">
-                            <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                            <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                            <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                            <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                        </svg>
+                        <LogIn size={16} className="text-zinc-400 group-hover:text-white transition-colors" />
                         Continue with Google
                     </>
                 )}

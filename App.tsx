@@ -96,6 +96,7 @@ const App: React.FC = () => {
                      setShelf(cloudShelf);
                      setView(AppView.DASHBOARD);
                      setIsPreviewMode(false);
+                     setShowSaveProfileModal(false);
                 }
             } else {
                 // User logged out
@@ -254,7 +255,7 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case AppView.ONBOARDING:
-        return <Onboarding onComplete={handleOnboardingComplete} />;
+        return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => setShowSaveProfileModal(true)} />;
 
       case AppView.FACE_SCANNER:
         return <FaceScanner key="face-scanner" onScanComplete={handleScanComplete} />;

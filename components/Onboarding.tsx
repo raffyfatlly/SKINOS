@@ -1,12 +1,14 @@
+
 import React, { useState } from 'react';
 import { SkinType } from '../types';
-import { ChevronRight, Sparkles, User, Calendar, ArrowRight, HelpCircle } from 'lucide-react';
+import { ChevronRight, Sparkles, Calendar, ArrowRight, HelpCircle, LogIn } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (data: { name: string; age: number; skinType: SkinType }) => void;
+  onSignIn: () => void;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
@@ -51,7 +53,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             <span className="text-[10px] font-bold tracking-widest uppercase text-teal-600">AI Dermatologist</span>
                         </div>
                         <h1 className="text-6xl font-black text-zinc-900 tracking-tighter mb-4 leading-tight">Hello, <br/><span className="text-zinc-300">Beautiful.</span></h1>
-                        <p className="text-lg text-zinc-500 font-medium leading-relaxed">Let's create your digital skin profile.</p>
+                        <p className="text-lg text-zinc-500 font-medium leading-relaxed">Let's build your digital skin profile.</p>
                     </div>
                     <div className="space-y-4 pt-4">
                         <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Your Name</label>
@@ -63,6 +65,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             className="w-full bg-transparent border-b-2 border-zinc-100 px-0 py-4 text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 focus:outline-none focus:border-teal-600 transition-all rounded-none"
                             autoFocus
                         />
+                    </div>
+                    
+                    <div className="pt-6">
+                        <button 
+                            onClick={onSignIn}
+                            className="w-full py-4 rounded-2xl border border-zinc-200 text-zinc-500 font-bold text-xs uppercase tracking-widest hover:bg-zinc-50 hover:text-zinc-900 transition-all flex items-center justify-center gap-2"
+                        >
+                            <LogIn size={16} /> Have an account? Sign In
+                        </button>
                     </div>
                 </div>
             )}
