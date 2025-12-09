@@ -1,17 +1,44 @@
-
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 // --- CONFIGURATION ---
+
+const getEnv = (key: string, fallback: string = "") => {
+  // 1. Try Vite standard (import.meta.env)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      // @ts-ignore
+      return import.meta.env[key];
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 2. Try Node/Process standard (process.env)
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      // @ts-ignore
+      return process.env[key];
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return fallback;
+};
+
+// Use environment variables for all sensitive configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCdvlMe7-XMrp5kJaU2IWDnes5yOfQSOg8",
-  authDomain: "skinapp-1f71a.firebaseapp.com",
-  projectId: "skinapp-1f71a",
-  storageBucket: "skinapp-1f71a.firebasestorage.app",
-  messagingSenderId: "115659351214",
-  appId: "1:115659351214:web:6d21eed5aab9bedda1393f",
-  measurementId: "G-RT6VLVB6GX"
+  apiKey: getEnv("VITE_FIREBASE_API_KEY", ""), 
+  authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN", "skinapp-1f71a.firebaseapp.com"),
+  projectId: getEnv("VITE_FIREBASE_PROJECT_ID", "skinapp-1f71a"),
+  storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET", "skinapp-1f71a.firebasestorage.app"),
+  messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID", "115659351214"),
+  appId: getEnv("VITE_FIREBASE_APP_ID", "1:115659351214:web:6d21eed5aab9bedda1393f"),
+  measurementId: getEnv("VITE_FIREBASE_MEASUREMENT_ID", "G-RT6VLVB6GX")
 };
 
 let app: FirebaseApp | undefined;
@@ -23,13 +50,17 @@ try {
   if (getApps().length > 0) {
       app = getApp();
   } else {
-      app = initializeApp(firebaseConfig);
+      // Only initialize if we have an API key (prevents crash loops in restricted envs)
+      if (firebaseConfig.apiKey) {
+          app = initializeApp(firebaseConfig);
+      } else {
+          console.warn("Firebase API Key missing in environment variables. Skipping initialization.");
+      }
   }
 
   if (app) {
       auth = getAuth(app);
       db = getFirestore(app);
-      console.log("Firebase Initialized Successfully");
   } 
 } catch (e) {
   console.error("CRITICAL: Firebase Initialization Failed", e);
@@ -39,9 +70,8 @@ const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = async () => {
     if (!auth) {
-        // If auth is missing, check console for the specific initialization error
         console.error("Auth object is undefined. App likely failed to initialize.");
-        throw new Error("Firebase not configured. Please refresh the page and try again.");
+        throw new Error("Firebase not configured. Please check VITE_FIREBASE_API_KEY.");
     }
     try {
         const result = await signInWithPopup(auth, googleProvider);
