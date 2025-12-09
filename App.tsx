@@ -61,6 +61,7 @@ const App: React.FC = () => {
   // New Guidance State
   const [guideStep, setGuideStep] = useState<'ANALYSIS' | 'SCAN' | 'SHELF' | null>(null);
   const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
+  const [saveModalMode, setSaveModalMode] = useState<'LOGIN' | 'SAVE'>('SAVE');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   // --- INITIAL DATA LOAD & AUTH LISTENER ---
@@ -233,6 +234,27 @@ const App: React.FC = () => {
           setUser(updatedUser);
           saveUserData(updatedUser, shelf);
           setShowSaveProfileModal(false);
+      } else if (saveModalMode === 'LOGIN') {
+          // If we are in login mode but no user exists (from onboarding), allow mock login
+          // Create dummy user for preview
+          console.log("Activating Preview/Offline Mode (New User)");
+          setIsPreviewMode(true);
+          const mockUser: UserProfile = {
+              name: "Preview User",
+              age: 25,
+              skinType: SkinType.NORMAL,
+              hasScannedFace: false,
+              biometrics: {
+                  overallScore: 85, acneActive: 90, acneScars: 90, poreSize: 85, blackheads: 85,
+                  wrinkleFine: 90, wrinkleDeep: 95, sagging: 90, pigmentation: 85, redness: 85,
+                  texture: 85, hydration: 80, oiliness: 80, darkCircles: 80, timestamp: Date.now()
+              },
+              isAnonymous: false
+          };
+          setUser(mockUser);
+          setShelf([]);
+          setView(AppView.DASHBOARD);
+          setShowSaveProfileModal(false);
       }
   };
   
@@ -255,7 +277,13 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case AppView.ONBOARDING:
-        return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => setShowSaveProfileModal(true)} />;
+        return <Onboarding 
+            onComplete={handleOnboardingComplete} 
+            onSignIn={() => {
+                setSaveModalMode('LOGIN');
+                setShowSaveProfileModal(true);
+            }} 
+        />;
 
       case AppView.FACE_SCANNER:
         return <FaceScanner key="face-scanner" onScanComplete={handleScanComplete} />;
@@ -321,6 +349,7 @@ const App: React.FC = () => {
                     className={`relative w-12 h-12 rounded-[1rem] bg-zinc-50 border border-zinc-100 flex items-center justify-center font-bold text-teal-600 shadow-sm cursor-pointer group hover:bg-zinc-100 transition-colors z-30 active:scale-95`}
                     onClick={() => {
                         if (user.isAnonymous) {
+                             setSaveModalMode('SAVE');
                              setShowSaveProfileModal(true);
                         } else {
                             setView(AppView.PROFILE_SETUP);
@@ -575,6 +604,7 @@ const App: React.FC = () => {
             }} 
             onClose={handleCloseSaveProfile} 
             onMockLogin={handleMockLogin}
+            mode={saveModalMode}
           />
       )}
       

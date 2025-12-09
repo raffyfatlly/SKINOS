@@ -1,15 +1,16 @@
 
 import React, { useState } from 'react';
-import { X, ShieldCheck, Fingerprint, Loader, AlertTriangle, Cloud, LogIn } from 'lucide-react';
+import { X, ShieldCheck, Fingerprint, Loader, AlertTriangle, Cloud, LogIn, UserCheck } from 'lucide-react';
 import { signInWithGoogle } from '../services/firebase';
 
 interface SaveProfileModalProps {
   onSave: () => void;
   onClose: () => void;
   onMockLogin?: () => void;
+  mode: 'LOGIN' | 'SAVE';
 }
 
-const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, onMockLogin }) => {
+const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, onMockLogin, mode }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +46,8 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
     }
   };
 
+  const isLogin = mode === 'LOGIN';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in duration-300">
       <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 relative animate-in zoom-in-95 shadow-2xl overflow-hidden border border-white/50">
@@ -61,17 +64,28 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
             <div className="relative w-24 h-24 mx-auto mb-6">
                  <div className="absolute inset-0 bg-teal-100/50 rounded-full animate-pulse"></div>
                  <div className="relative w-full h-full bg-gradient-to-tr from-teal-50 to-white rounded-full flex items-center justify-center shadow-lg shadow-teal-100 border border-teal-100">
-                    <Cloud size={36} className="text-teal-600" />
+                    {isLogin ? (
+                        <UserCheck size={36} className="text-teal-600" />
+                    ) : (
+                        <Cloud size={36} className="text-teal-600" />
+                    )}
                  </div>
-                 <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center">
-                    <Fingerprint size={14} className="text-white" />
-                 </div>
+                 {!isLogin && (
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center">
+                        <Fingerprint size={14} className="text-white" />
+                    </div>
+                 )}
             </div>
 
-            <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-3">Save Skin Profile</h2>
+            <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-3">
+                {isLogin ? "Welcome Back" : "Save Skin Profile"}
+            </h2>
             
             <p className="text-sm text-zinc-500 font-medium leading-relaxed mb-6">
-                Sign in to sync your existing data, or create an account to back up your new analysis.
+                {isLogin 
+                    ? "Sign in to access your dashboard, synced shelf, and past skin analysis history."
+                    : "Create an account to backup your analysis, save your shelf, and track progress over time."
+                }
             </p>
 
             <div className="space-y-3 mb-8 text-left">
@@ -101,14 +115,16 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                 {loading ? <Loader size={16} className="animate-spin" /> : (
                     <>
                         <LogIn size={16} className="text-zinc-400 group-hover:text-white transition-colors" />
-                        Continue with Google
+                        {isLogin ? "Sign In with Google" : "Continue with Google"}
                     </>
                 )}
             </button>
             
-            <button onClick={onClose} disabled={loading} className="mt-6 text-xs font-bold text-zinc-400 hover:text-zinc-600 transition-colors">
-                Maybe later
-            </button>
+            {!isLogin && (
+                <button onClick={onClose} disabled={loading} className="mt-6 text-xs font-bold text-zinc-400 hover:text-zinc-600 transition-colors">
+                    Maybe later
+                </button>
+            )}
         </div>
       </div>
     </div>

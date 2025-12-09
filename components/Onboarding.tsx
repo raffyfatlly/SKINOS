@@ -39,9 +39,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
                 <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-teal-600' : 'w-2 bg-zinc-100'}`} />
             ))}
           </div>
-          <div className="text-zinc-300 text-[10px] font-bold tracking-widest uppercase">
-            Step {step + 1}/3
-          </div>
+          
+          {step === 0 ? (
+             <button 
+                onClick={onSignIn}
+                className="text-zinc-500 text-[11px] font-bold tracking-widest uppercase hover:text-teal-600 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-50 hover:bg-teal-50"
+             >
+                <LogIn size={14} /> Log In
+             </button>
+          ) : (
+             <div className="text-zinc-300 text-[10px] font-bold tracking-widest uppercase">
+                Step {step + 1}/3
+             </div>
+          )}
       </div>
 
       <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full">
@@ -65,15 +75,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
                             className="w-full bg-transparent border-b-2 border-zinc-100 px-0 py-4 text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 focus:outline-none focus:border-teal-600 transition-all rounded-none"
                             autoFocus
                         />
-                    </div>
-                    
-                    <div className="pt-6">
-                        <button 
-                            onClick={onSignIn}
-                            className="w-full py-4 rounded-2xl border border-zinc-200 text-zinc-500 font-bold text-xs uppercase tracking-widest hover:bg-zinc-50 hover:text-zinc-900 transition-all flex items-center justify-center gap-2"
-                        >
-                            <LogIn size={16} /> Have an account? Sign In
-                        </button>
                     </div>
                 </div>
             )}
