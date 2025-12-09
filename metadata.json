@@ -1,0 +1,7 @@
+{
+  "name": "Copy of SkinOS (Progress 1.2)",
+  "description": "Advanced dermatological assistant using computer vision and AI to analyze skin health, scan product ingredients, and manage routine safety.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
