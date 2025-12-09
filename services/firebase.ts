@@ -1,3 +1,4 @@
+
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
@@ -30,9 +31,11 @@ const getEnv = (key: string, fallback: string = "") => {
   return fallback;
 };
 
-// Use environment variables for all sensitive configuration
+// ------------------------------------------------------------------
+// Firebase Configuration
+// ------------------------------------------------------------------
 const firebaseConfig = {
-  apiKey: getEnv("VITE_FIREBASE_API_KEY", ""), 
+  apiKey: getEnv("VITE_FIREBASE_API_KEY", "AIzaSyCdvlMe7-XMrp5kJaU2IWDnes5yOfQSOg8"), 
   authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN", "skinapp-1f71a.firebaseapp.com"),
   projectId: getEnv("VITE_FIREBASE_PROJECT_ID", "skinapp-1f71a"),
   storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET", "skinapp-1f71a.firebasestorage.app"),
@@ -45,16 +48,20 @@ let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
 
+// Check if the user has actually pasted their keys (simple validation)
+const isConfigured = firebaseConfig.apiKey && 
+                     !firebaseConfig.apiKey.includes("PASTE_YOUR_API_KEY");
+
 try {
   // Simple check: if app exists, get it; otherwise initialize it.
   if (getApps().length > 0) {
       app = getApp();
   } else {
-      // Only initialize if we have an API key (prevents crash loops in restricted envs)
-      if (firebaseConfig.apiKey) {
+      // Only initialize if we have a valid API key
+      if (isConfigured) {
           app = initializeApp(firebaseConfig);
       } else {
-          console.warn("Firebase API Key missing in environment variables. Skipping initialization.");
+          console.warn("⚠️ Firebase Not Configured: Open services/firebase.ts and paste your keys.");
       }
   }
 
@@ -69,9 +76,12 @@ try {
 const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = async () => {
+    if (!isConfigured) {
+        throw new Error("Firebase not configured. Please open services/firebase.ts and paste your API keys from the Firebase Console.");
+    }
     if (!auth) {
         console.error("Auth object is undefined. App likely failed to initialize.");
-        throw new Error("Firebase not configured. Please check VITE_FIREBASE_API_KEY.");
+        throw new Error("Firebase failed to initialize. Check console for errors.");
     }
     try {
         const result = await signInWithPopup(auth, googleProvider);
