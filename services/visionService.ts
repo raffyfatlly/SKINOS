@@ -57,7 +57,7 @@ export const validateFrame = (
 };
 
 const normalizeScore = (raw: number): number => {
-    return Math.floor(Math.max(18, Math.min(98, raw)));
+    return Math.floor(Math.max(10, Math.min(99, raw)));
 };
 
 // --- COLOR SPACE CONVERSIONS ---
@@ -332,8 +332,11 @@ function calculateRedness(img: ImageData): number {
          count++;
     }
     const avgSeverity = count > 0 ? rednessSeverity / count : 0;
-    // Lower score is worse. Severity 0 = Score 100. Severity 10 = Score ~50
-    return Math.max(10, 100 - (avgSeverity * 4)); 
+    // STRICTER SCORING: 
+    // Severity 0 = 100
+    // Severity 5 = 60 (Visible redness)
+    // Severity 10+ = 20 (Severe)
+    return Math.max(10, 100 - (avgSeverity * 8)); 
 }
 
 // 2. Blemishes (Relative to self)
@@ -343,19 +346,19 @@ function calculateBlemishes(img: ImageData): { active: number, scars: number } {
     let scarPixels = 0;
     let count = 0;
     
-    // REDUCED SENSITIVITY: To distinguish peeling from acne, we require higher threshold for "Acne"
-    // Peeling often creates high-frequency noise, so single pixels are less likely to be acne.
-    // In a full CV system we'd use blob detection, here we use strict color thresholds.
     for (let i = 0; i < img.data.length; i += 16) {
         const { L, a } = rgbToLab(img.data[i], img.data[i+1], img.data[i+2]);
-        // Active: High Redness. Increased threshold to 18 (from 15) to avoid catching minor inflammation/peeling
-        if (a > stats.meanA + 18) activePixels++;
-        // Scars: Darker than average. Increased threshold to -25 (from -20) to avoid catching shadows from peeling
+        // Active: Lowered threshold to 15 to catch more spots.
+        if (a > stats.meanA + 15) activePixels++;
+        // Scars: Darker than average.
         if (L < stats.meanL - 25) scarPixels++;
         count++;
     }
-    const activeScore = count > 0 ? 100 - (activePixels / count) * 600 : 100;
-    const scarScore = count > 0 ? 100 - (scarPixels / count) * 400 : 100;
+    // STRICTER PENALTY:
+    // If 1% of pixels are acne, score drops by 15 points.
+    // If 5% of pixels are acne, score drops by 75 points (Result ~25).
+    const activeScore = count > 0 ? 100 - (activePixels / count) * 1500 : 100;
+    const scarScore = count > 0 ? 100 - (scarPixels / count) * 800 : 100;
     return {
         active: Math.max(10, activeScore),
         scars: Math.max(10, scarScore)
@@ -378,7 +381,8 @@ function calculateHydration(img: ImageData): number {
     }
     const ratio = total > 0 ? glowPixels / total : 0;
     // Target ratio ~10-15% for healthy glow. Too high = Oily. Too low = Dry.
-    return Math.max(10, 100 - Math.abs(ratio - 0.12) * 300); 
+    // STRICTER PENALTY for dryness (ratio < 0.05)
+    return Math.max(10, 100 - Math.abs(ratio - 0.12) * 500); 
 }
 
 // 5. Oiliness

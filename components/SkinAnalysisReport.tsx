@@ -1,11 +1,22 @@
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
 import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 // --- SUB COMPONENTS ---
+
+const renderVerdict = (text: string) => {
+  if (!text) return null;
+  // Split by bold markers
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-bold text-teal-700">{part.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+};
 
 interface MetricRingProps {
   label: string;
@@ -783,7 +794,7 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
                      </span>
                  </div>
                  <p className="text-sm text-zinc-600 font-normal leading-relaxed">
-                    {groupAnalysis.summaryText}
+                    {renderVerdict(groupAnalysis.summaryText)}
                  </p>
              </div>
         </div>
