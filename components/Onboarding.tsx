@@ -42,9 +42,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
             {step > 0 && (
                 <button 
                     onClick={handleBack}
-                    className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:text-zinc-900 transition-colors"
+                    className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 hover:bg-zinc-200 transition-colors shadow-sm"
+                    title="Back"
                 >
-                    <ArrowLeft size={16} />
+                    <ArrowLeft size={18} />
                 </button>
             )}
             <div className="flex gap-2">

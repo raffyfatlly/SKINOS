@@ -121,6 +121,26 @@ const getFallbackProduct = (userMetrics?: SkinMetrics): Product => ({
     dateScanned: Date.now()
 });
 
+// --- STABILIZATION ALGORITHMS ---
+
+/**
+ * Blends new score with old score based on stability confidence.
+ * If stability is high (same environment), we heavily weight the previous score to prevent jitter.
+ * 
+ * Formula: (Prev * Damping) + (New * (1 - Damping))
+ */
+const stabilizeScore = (newScore: number, prevScore: number, stabilityFactor: number): number => {
+    // If scores are wildly different (>15 pts), assume real change or error, trust new score more.
+    if (Math.abs(newScore - prevScore) > 15) return newScore;
+
+    // Apply damping
+    // Stability 1.0 = 70% weight to previous (Very sticky)
+    // Stability 0.5 = 35% weight to previous
+    const damping = stabilityFactor * 0.70; 
+    
+    return Math.round((prevScore * damping) + (newScore * (1 - damping)));
+};
+
 // --- AI FUNCTIONS ---
 
 export const analyzeFaceSkin = async (
@@ -138,42 +158,69 @@ export const analyzeFaceSkin = async (
     return runWithRetry(async (ai) => {
         
         // 2. CONSISTENCY PROTOCOL
-        // Round local metrics to nearest 10 to smooth out CV noise (e.g., lighting flicker)
-        const round10 = (n: number) => Math.round(n / 10) * 10;
+        // Round local metrics to nearest 5 to smooth out CV noise
+        const round = (n: number) => Math.round(n / 5) * 5;
         
+        // 3. HISTORY ANCHORING
+        let anchorContext = "";
+        let prevScan: SkinMetrics | null = null;
+        let timeDiffMinutes = 0;
+
+        if (history && history.length > 0) {
+            prevScan = history[history.length - 1];
+            timeDiffMinutes = (Date.now() - prevScan.timestamp) / 1000 / 60;
+            
+            // Only anchor if the last scan was recent (e.g., < 48 hours)
+            // If it's been months, skin changes, so we trust new scan more.
+            if (timeDiffMinutes < 2880) { // 2 days
+                anchorContext = `
+                === CONSISTENCY ANCHOR (EXTREMELY IMPORTANT) ===
+                Previous Scan (${Math.round(timeDiffMinutes)} mins ago):
+                - Overall: ${prevScan.overallScore}
+                - Acne: ${prevScan.acneActive}
+                - Redness: ${prevScan.redness}
+                - Wrinkles: ${prevScan.wrinkleFine}
+                
+                CONTEXT INSTRUCTION:
+                1. ANALYZE CONTEXT: Compare the input image to the implied context of the previous scores.
+                2. ENVIRONMENT CHECK: If the lighting, angle, and person look the same as a typical session for these scores:
+                   - You MUST output scores within +/- 3 points of the Previous Scan.
+                   - DO NOT lower scores just because of "shadows" or "grain".
+                   - ONLY deviate significantly if you see a NEW, CLEAR blemish that wasn't there before.
+                3. STABILITY RATING: Return a 'stabilityRating' (0-100) indicating how similar the environment/person appears to the baseline expectation.
+                `;
+            }
+        }
+
         const metricString = localMetrics ? JSON.stringify({
-            acne: round10(localMetrics.acneActive),
-            redness: round10(localMetrics.redness),
-            wrinkles: round10(localMetrics.wrinkleFine),
-            texture: round10(localMetrics.texture),
-            hydration: round10(localMetrics.hydration),
-            overall: round10(localMetrics.overallScore)
+            acne: round(localMetrics.acneActive),
+            redness: round(localMetrics.redness),
+            wrinkles: round(localMetrics.wrinkleFine),
+            hydration: round(localMetrics.hydration),
+            overall: round(localMetrics.overallScore)
         }) : "Not Available";
 
         const promptContext = `
-        You are a highly precise, deterministic dermatological grading algorithm.
+        You are a Dermatological Analysis AI designed for precision and consistency.
         
         INPUT DATA:
-        - Image: High-Resolution Face Scan (Pre-processed).
-        - CV Estimates (Smoothed): ${metricString}
+        - Image: High-Resolution Face Scan.
+        - Computer Vision Estimates (Reference): ${metricString}
+        ${anchorContext}
         
         TASK:
-        Analyze the structural skin condition with EXTREME CONSISTENCY.
+        Grade the skin metrics (0-100). Higher is ALWAYS Better/Healthier.
         
-        STRICT SCORING RULES:
-        1. ACNE/BLEMISHES: 
-           - 90-100: Absolute perfection. Zero visible spots.
-           - 80-89: 1-2 tiny non-inflamed marks.
-           - 60-79: Visible acne. If you see ANY red inflamed bumps, score MUST be below 80.
-           - 40-59: Multiple active breakouts.
-           - 0-39: Severe acne.
-           DO NOT FLIP FLOP. If unsure between two tiers (e.g., 60 vs 80), check the CV estimate. If CV is < 70, trust the lower score.
-        2. ANCHORING: Use the provided CV metrics as a baseline anchor. Deviate only if visual evidence is overwhelming.
-           - If CV Acne is 40, do not score 90 unless the CV is obviously wrong (e.g. hair detection error).
-           - If CV Acne is 90, do not score 40 unless you see obvious breakouts missed by CV.
-        3. IGNORE LIGHTING: The image has been normalized. Do not penalize for shadows. Look for structural features.
+        SCORING RUBRIC:
+        - 90-100: Flawless / Ideal.
+        - 75-89: Good / Minor imperfections.
+        - 50-74: Visible issues (Acne, Redness, Lines).
+        - 0-49: Severe issues.
         
-        OUTPUT FORMAT: JSON only. Round all scores to nearest integer.
+        OUTPUT FORMAT: JSON.
+        Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, skinAge, stabilityRating (0-100), analysisSummary (string).
+        
+        Be consistent. If unsure, lean towards the Reference scores.
         `;
 
         const response = await ai.models.generateContent({
@@ -186,7 +233,6 @@ export const analyzeFaceSkin = async (
             },
             config: {
                 temperature: 0,      // Zero temp for maximum determinism
-                topK: 1,             // Restrict variance
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -205,6 +251,7 @@ export const analyzeFaceSkin = async (
                         hydration: { type: Type.INTEGER },
                         oiliness: { type: Type.INTEGER },
                         darkCircles: { type: Type.INTEGER },
+                        stabilityRating: { type: Type.INTEGER }, // New Field
                         analysisSummary: { type: Type.STRING },
                         skinAge: { type: Type.INTEGER },
                         observations: { 
@@ -224,22 +271,40 @@ export const analyzeFaceSkin = async (
         const aiData = JSON.parse(response.text || "{}");
         if (!aiData.overallScore && !localMetrics) throw new Error("Invalid AI Response");
 
-        // Force integer rounding on all numeric fields to ensure consistency
+        // 4. POST-PROCESSING STABILIZATION
+        // If AI indicates high stability (same person/environment) OR scan was very recent (<5 mins), apply damping.
+        const stabilityRating = aiData.stabilityRating || 0;
+        const isRecent = timeDiffMinutes < 5;
+        
+        // Calculate a stabilization factor (0.0 to 1.0)
+        // If recent and stable, factor is high (1.0). If old or unstable, factor is low.
+        let stabilizationFactor = 0;
+        if (prevScan) {
+             if (isRecent) stabilizationFactor = 0.9; // 90% Damping for rapid rescans
+             else if (stabilityRating > 80) stabilizationFactor = 0.6; // 60% Damping for same environment
+        }
+
+        const stabilize = (newVal: number, key: keyof SkinMetrics) => {
+            if (!prevScan || stabilizationFactor === 0) return newVal;
+            const prevVal = prevScan[key] as number;
+            return stabilizeScore(newVal, prevVal, stabilizationFactor);
+        };
+
         const finalMetrics: SkinMetrics = {
-            overallScore: Math.round(aiData.overallScore || localMetrics?.overallScore || 0),
-            acneActive: Math.round(aiData.acneActive || localMetrics?.acneActive || 0),
-            acneScars: Math.round(aiData.acneScars || localMetrics?.acneScars || 0),
-            poreSize: Math.round(aiData.poreSize || localMetrics?.poreSize || 0),
-            blackheads: Math.round(aiData.blackheads || localMetrics?.blackheads || 0),
-            wrinkleFine: Math.round(aiData.wrinkleFine || localMetrics?.wrinkleFine || 0),
-            wrinkleDeep: Math.round(aiData.wrinkleDeep || localMetrics?.wrinkleDeep || 0),
-            sagging: Math.round(aiData.sagging || localMetrics?.sagging || 0),
-            pigmentation: Math.round(aiData.pigmentation || localMetrics?.pigmentation || 0),
-            redness: Math.round(aiData.redness || localMetrics?.redness || 0),
-            texture: Math.round(aiData.texture || localMetrics?.texture || 0),
-            hydration: Math.round(aiData.hydration || localMetrics?.hydration || 0),
-            oiliness: Math.round(aiData.oiliness || localMetrics?.oiliness || 0),
-            darkCircles: Math.round(aiData.darkCircles || localMetrics?.darkCircles || 0),
+            overallScore: stabilize(Math.round(aiData.overallScore || localMetrics?.overallScore || 0), 'overallScore'),
+            acneActive: stabilize(Math.round(aiData.acneActive || localMetrics?.acneActive || 0), 'acneActive'),
+            acneScars: stabilize(Math.round(aiData.acneScars || localMetrics?.acneScars || 0), 'acneScars'),
+            poreSize: stabilize(Math.round(aiData.poreSize || localMetrics?.poreSize || 0), 'poreSize'),
+            blackheads: stabilize(Math.round(aiData.blackheads || localMetrics?.blackheads || 0), 'blackheads'),
+            wrinkleFine: stabilize(Math.round(aiData.wrinkleFine || localMetrics?.wrinkleFine || 0), 'wrinkleFine'),
+            wrinkleDeep: stabilize(Math.round(aiData.wrinkleDeep || localMetrics?.wrinkleDeep || 0), 'wrinkleDeep'),
+            sagging: stabilize(Math.round(aiData.sagging || localMetrics?.sagging || 0), 'sagging'),
+            pigmentation: stabilize(Math.round(aiData.pigmentation || localMetrics?.pigmentation || 0), 'pigmentation'),
+            redness: stabilize(Math.round(aiData.redness || localMetrics?.redness || 0), 'redness'),
+            texture: stabilize(Math.round(aiData.texture || localMetrics?.texture || 0), 'texture'),
+            hydration: stabilize(Math.round(aiData.hydration || localMetrics?.hydration || 0), 'hydration'),
+            oiliness: stabilize(Math.round(aiData.oiliness || localMetrics?.oiliness || 0), 'oiliness'),
+            darkCircles: stabilize(Math.round(aiData.darkCircles || localMetrics?.darkCircles || 0), 'darkCircles'),
             skinAge: Math.round(aiData.skinAge || 25),
             analysisSummary: aiData.analysisSummary || "Analysis Complete",
             observations: aiData.observations || {},

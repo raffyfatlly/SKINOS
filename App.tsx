@@ -73,9 +73,9 @@ const App: React.FC = () => {
         if (loadedUser) {
             // Fix: Unregistered (anonymous) users start fresh on refresh to prevent stale data
             if (loadedUser.isAnonymous) {
-                 console.log("Clearing anonymous session data.");
+                 console.log("Clearing anonymous session data on refresh.");
                  clearLocalData();
-                 // Do not set user, remains null -> Onboarding
+                 // We do NOT set user here, so it remains null and shows Onboarding
             } else {
                  // Ensure backwards compatibility
                  if (loadedUser.isAnonymous === undefined) loadedUser.isAnonymous = false;
@@ -382,7 +382,7 @@ const App: React.FC = () => {
                         </div>
                         <div>
                             <span className="text-xs font-bold text-amber-800 block">Preview Mode Active</span>
-                            <span className="text-[10px] text-amber-600 font-medium leading-none">Changes saved locally (Domain unauthorized for cloud).</span>
+                            <span className="text-xs text-amber-600 font-medium leading-none">Changes saved locally (Domain unauthorized for cloud).</span>
                         </div>
                     </div>
                 )}
