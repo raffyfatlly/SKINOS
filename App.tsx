@@ -71,20 +71,13 @@ const App: React.FC = () => {
         const { user: loadedUser, shelf: loadedShelf } = await loadUserData();
         
         if (loadedUser) {
-            // Fix: Unregistered (anonymous) users start fresh on refresh to prevent stale data
-            if (loadedUser.isAnonymous) {
-                 console.log("Clearing anonymous session data on refresh.");
-                 clearLocalData();
-                 // We do NOT set user here, so it remains null and shows Onboarding
-            } else {
-                 // Ensure backwards compatibility
-                 if (loadedUser.isAnonymous === undefined) loadedUser.isAnonymous = false;
-                 if (!loadedUser.scanHistory) loadedUser.scanHistory = [loadedUser.biometrics];
-                 
-                 setUser(loadedUser);
-                 setShelf(loadedShelf);
-                 setView(AppView.DASHBOARD);
-            }
+             // Ensure backwards compatibility
+             if (loadedUser.isAnonymous === undefined) loadedUser.isAnonymous = false;
+             if (!loadedUser.scanHistory) loadedUser.scanHistory = [loadedUser.biometrics];
+             
+             setUser(loadedUser);
+             setShelf(loadedShelf);
+             setView(AppView.DASHBOARD);
         }
         setIsLoading(false);
     };
@@ -297,6 +290,13 @@ const App: React.FC = () => {
             key="face-scanner" 
             onScanComplete={handleScanComplete} 
             scanHistory={user?.scanHistory || []} 
+            onCancel={() => {
+                if (user) {
+                    setView(AppView.DASHBOARD);
+                } else {
+                    setView(AppView.ONBOARDING);
+                }
+            }}
         />;
       
       case AppView.PRODUCT_SCANNER:
@@ -344,7 +344,9 @@ const App: React.FC = () => {
              <header className="fixed top-0 left-0 right-0 z-30 px-6 pt-12 pb-4 bg-white/90 backdrop-blur-xl border-b border-zinc-50 flex justify-between items-center h-28 transition-all">
                 <div>
                     <div className="flex items-center gap-2 mb-1.5">
-                        <p className="text-zinc-400 text-[10px] font-bold tracking-widest uppercase">Welcome back</p>
+                        <p className="text-zinc-400 text-[10px] font-bold tracking-widest uppercase">
+                          {user.isAnonymous ? 'Hello' : 'Welcome back'}
+                        </p>
                         <button 
                             onClick={() => startGuide(true)}
                             className="w-5 h-5 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
@@ -391,8 +393,13 @@ const App: React.FC = () => {
                     userProfile={user}
                     shelf={shelf}
                     onRescan={() => {
-                        setTempUserData({ name: user.name, age: user.age, skinType: user.skinType });
-                        setView(AppView.FACE_SCANNER);
+                        if (user.isAnonymous) {
+                             setSaveModalMode('SAVE');
+                             setShowSaveProfileModal(true);
+                        } else {
+                            setTempUserData({ name: user.name, age: user.age, skinType: user.skinType });
+                            setView(AppView.FACE_SCANNER);
+                        }
                     }}
                     onConsultAI={(query) => {
                         setAiTriggerQuery(query);

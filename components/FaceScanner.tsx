@@ -1,7 +1,6 @@
 
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Sparkles, Image as ImageIcon, ScanFace, BrainCircuit, Target, Lightbulb, CheckCircle2, Focus } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, ScanFace, BrainCircuit, Target, Lightbulb, CheckCircle2, Focus, X } from 'lucide-react';
 import { analyzeSkinFrame, drawBiometricOverlay, validateFrame, applyClinicalOverlays, applyMedicalProcessing, preprocessForAI } from '../services/visionService';
 import { analyzeFaceSkin } from '../services/geminiService';
 import { SkinMetrics } from '../types';
@@ -9,9 +8,10 @@ import { SkinMetrics } from '../types';
 interface FaceScannerProps {
   onScanComplete: (metrics: SkinMetrics, image: string) => void;
   scanHistory?: SkinMetrics[];
+  onCancel?: () => void;
 }
 
-const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }) => {
+const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, onCancel }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -467,6 +467,16 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
                 <ScanFace size={16} className="text-white" />
                 <span className="text-white text-xs font-bold tracking-wider">SKIN AI</span>
              </div>
+
+             {/* Close Button - ADDED */}
+             {onCancel && (
+               <button 
+                 onClick={onCancel}
+                 className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white border border-white/10 hover:bg-black/40 transition-colors z-50 cursor-pointer"
+               >
+                 <X size={20} />
+               </button>
+             )}
           </div>
 
           {isScanning && (

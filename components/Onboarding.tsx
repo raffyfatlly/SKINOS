@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SkinType } from '../types';
-import { ChevronRight, Sparkles, Calendar, ArrowRight, HelpCircle, LogIn, ArrowLeft } from 'lucide-react';
+import { Sparkles, Calendar, ArrowRight, LogIn, ArrowLeft, ScanFace } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (data: { name: string; age: number; skinType: SkinType }) => void;
@@ -15,24 +15,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
 
   const handleNext = () => {
     if (step === 0 && name) setStep(1);
-    else if (step === 1 && age) setStep(2);
+    else if (step === 1 && age) {
+        onComplete({ name, age: parseInt(age), skinType: SkinType.UNKNOWN });
+    }
   };
 
   const handleBack = () => {
       if (step > 0) setStep(step - 1);
   };
-
-  const handleFinalSelection = (selectedType: SkinType) => {
-    onComplete({ name, age: parseInt(age), skinType: selectedType });
-  };
-
-  const skinTypes = [
-    { type: SkinType.OILY, label: 'Oily', desc: 'Shiny t-zone' },
-    { type: SkinType.DRY, label: 'Dry', desc: 'Tight, flaky' },
-    { type: SkinType.COMBINATION, label: 'Combination', desc: 'Oily T-zone' },
-    { type: SkinType.SENSITIVE, label: 'Sensitive', desc: 'Redness' },
-    { type: SkinType.NORMAL, label: 'Normal', desc: 'Balanced' },
-  ];
 
   return (
     <div className="h-screen w-full relative bg-white overflow-hidden flex flex-col font-sans p-8">
@@ -49,7 +39,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
                 </button>
             )}
             <div className="flex gap-2">
-                {[0, 1, 2].map(i => (
+                {[0, 1].map(i => (
                     <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-teal-600' : 'w-2 bg-zinc-100'}`} />
                 ))}
             </div>
@@ -64,7 +54,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
              </button>
           ) : (
              <div className="text-zinc-300 text-[10px] font-bold tracking-widest uppercase">
-                Step {step + 1}/3
+                Step {step + 1}/2
              </div>
           )}
       </div>
@@ -117,55 +107,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
                     </div>
                 </div>
             )}
-
-            {step === 2 && (
-                <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-8 duration-500">
-                    <div className="shrink-0 mb-8">
-                        <h1 className="text-4xl font-black text-zinc-900 tracking-tighter mb-3">Skin Type</h1>
-                        <p className="text-zinc-500 font-medium">Select the one that matches best.</p>
-                    </div>
-                    
-                    <div className="flex-1 overflow-y-auto no-scrollbar pb-4 space-y-3">
-                        {skinTypes.map((s) => (
-                            <button
-                                key={s.type}
-                                onClick={() => handleFinalSelection(s.type)}
-                                className="w-full p-6 rounded-[1.5rem] bg-white border border-zinc-100 shadow-sm text-left transition-all duration-200 group hover:border-teal-600 hover:shadow-lg active:scale-[0.99] flex items-center justify-between"
-                            >
-                                <div>
-                                    <span className="block font-bold text-lg text-zinc-900">{s.label}</span>
-                                    <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{s.desc}</span>
-                                </div>
-                                <div className="w-10 h-10 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-300 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                                    <ChevronRight size={18} />
-                                </div>
-                            </button>
-                        ))}
-                        
-                        <button
-                            onClick={() => handleFinalSelection(SkinType.UNKNOWN)}
-                            className="w-full p-6 rounded-[1.5rem] border-2 border-dashed border-zinc-200 text-center transition-all duration-200 flex items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-300 text-zinc-400 hover:text-zinc-600 mt-2"
-                        >
-                            <HelpCircle size={18} />
-                            <span className="font-bold text-sm">I'm not sure, let AI decide</span>
-                        </button>
-                    </div>
-                </div>
-            )}
       </div>
 
-      {step < 2 && (
-          <button
-            onClick={handleNext}
-            disabled={(step === 0 && !name) || (step === 1 && !age)}
-            className="w-full h-20 bg-zinc-900 text-white rounded-[2rem] font-bold text-lg flex items-center justify-between px-8 disabled:opacity-50 disabled:scale-100 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-zinc-900/20 mt-4 group shrink-0"
-        >
-            <span>Next Step</span>
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors border border-white/10">
-                <ArrowRight size={22} />
-            </div>
-        </button>
-      )}
+      <button
+        onClick={handleNext}
+        disabled={(step === 0 && !name) || (step === 1 && !age)}
+        className="w-full h-20 bg-zinc-900 text-white rounded-[2rem] font-bold text-lg flex items-center justify-between px-8 disabled:opacity-50 disabled:scale-100 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-zinc-900/20 mt-4 group shrink-0"
+    >
+        <span>{step === 1 ? 'Start Scan' : 'Next Step'}</span>
+        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors border border-white/10">
+            {step === 1 ? <ScanFace size={22} /> : <ArrowRight size={22} />}
+        </div>
+    </button>
     </div>
   );
 };

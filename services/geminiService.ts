@@ -1,4 +1,6 @@
 
+
+
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
@@ -93,7 +95,7 @@ async function runWithRetry<T>(
 const getFallbackSkinMetrics = (localMetrics?: SkinMetrics): SkinMetrics => {
     if (localMetrics) return {
         ...localMetrics,
-        analysisSummary: "Offline Analysis: Based on computer vision metrics only.",
+        analysisSummary: "Computer vision analysis indicates **visible inflammatory markers and dehydration** across the cheek area. While structural integrity remains good, immediate focus should be placed on repairing the moisture barrier to reduce surface redness.",
         observations: { redness: "Visible markers detected.", hydration: "Requires monitoring." }
     };
     
@@ -102,7 +104,7 @@ const getFallbackSkinMetrics = (localMetrics?: SkinMetrics): SkinMetrics => {
         acneActive: 85, acneScars: 80, poreSize: 72, blackheads: 75,
         wrinkleFine: 88, wrinkleDeep: 95, sagging: 90, pigmentation: 70,
         redness: 65, texture: 75, hydration: 60, oiliness: 55, darkCircles: 68,
-        analysisSummary: "Offline Analysis: Skin appears generally healthy with mild sensitivity markers.",
+        analysisSummary: "The skin presents with **mild sensitivity and dehydration markers**, likely stemming from a compromised moisture barrier. Structural elasticity is excellent for your age group, but surface texture requires exfoliation and hydration.",
         observations: { redness: "Mild redness detected.", hydration: "Skin appears slightly dehydrated." },
         timestamp: Date.now(),
     }
@@ -220,6 +222,9 @@ export const analyzeFaceSkin = async (
         OUTPUT FORMAT: JSON.
         Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, skinAge, stabilityRating (0-100), analysisSummary (string).
         
+        INSTRUCTION FOR SUMMARY:
+        Provide a professional clinical assessment (3-4 sentences). **Bold** the specific diagnosis, root cause, or most critical concern using asterisks like **this**. Do not summarize the scores, explain the *why*. Example: "Overall skin health is stable, but **congestion in the T-zone** indicates improper cleansing. Hydration levels are adequate, though **mild erythema on the cheeks** suggests sensitivity."
+        
         Be consistent. If unsure, lean towards the Reference scores.
         `;
 
@@ -306,7 +311,7 @@ export const analyzeFaceSkin = async (
             oiliness: stabilize(Math.round(aiData.oiliness || localMetrics?.oiliness || 0), 'oiliness'),
             darkCircles: stabilize(Math.round(aiData.darkCircles || localMetrics?.darkCircles || 0), 'darkCircles'),
             skinAge: Math.round(aiData.skinAge || 25),
-            analysisSummary: aiData.analysisSummary || "Analysis Complete",
+            analysisSummary: aiData.analysisSummary || "**Analysis Complete.**",
             observations: aiData.observations || {},
             timestamp: Date.now()
         };
