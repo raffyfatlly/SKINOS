@@ -1,6 +1,15 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, Auth } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  updateProfile, 
+  signOut as firebaseSignOut, 
+  Auth 
+} from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 // --- CONFIGURATION ---
@@ -100,6 +109,27 @@ export const signInWithGoogle = async () => {
         }
         throw error;
     }
+};
+
+export const registerWithEmail = async (name: string, email: string, pass: string) => {
+  if (!auth) throw new Error("Firebase auth not initialized");
+  
+  // 1. Create User
+  const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+  const user = userCredential.user;
+
+  // 2. Update Display Name
+  await updateProfile(user, {
+    displayName: name
+  });
+
+  return user;
+};
+
+export const loginWithEmail = async (email: string, pass: string) => {
+  if (!auth) throw new Error("Firebase auth not initialized");
+  const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+  return userCredential.user;
 };
 
 export const signOut = async () => {
