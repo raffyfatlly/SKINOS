@@ -104,10 +104,15 @@ const getFallbackProduct = (userMetrics?: SkinMetrics): Product => ({
 
 // --- AI FUNCTIONS ---
 
-export const analyzeFaceSkin = async (imageBase64: string, localMetrics?: SkinMetrics): Promise<SkinMetrics> => {
+export const analyzeFaceSkin = async (
+    imageBase64: string, 
+    localMetrics?: SkinMetrics, 
+    history?: SkinMetrics[]
+): Promise<SkinMetrics> => {
     return runWithRetry(async (ai) => {
         // Construct a context string with the local deterministic data
         let promptContext = "Analyze this face for dermatological metrics (0-100). 100 is PERFECT health (no issues).";
+        
         if (localMetrics) {
             promptContext += `
             
@@ -122,12 +127,50 @@ export const analyzeFaceSkin = async (imageBase64: string, localMetrics?: SkinMe
             2. TEXTURE PENALTY: If you see peeling or roughness, the "Texture Score" must be LOW (Bad condition, e.g., < 50).
             3. BARRIER HEALTH: If you see significant redness or peeling, the "Overall Score" MUST be penalized (e.g., < 65). Do not give a high Overall Score to damaged skin even if there are no wrinkles.
             4. CONSISTENCY: Use the provided CV data as an anchor, but if the visual evidence clearly contradicts it (e.g. CV says Acne is 30 but it's actually peeling), OVERRIDE the CV score heavily.
+            `;
+        }
+
+        // NEW: Contextual History Awareness
+        if (history && history.length > 0) {
+            // Sort history to get the latest valid scan
+            const sortedHistory = [...history].sort((a,b) => b.timestamp - a.timestamp);
+            const lastScan = sortedHistory[0];
+            const daysDiff = Math.max(0, (Date.now() - lastScan.timestamp) / (1000 * 60 * 60 * 24));
+
+            promptContext += `
             
+            PATIENT HISTORY (CONTEXTUAL BASELINE):
+            - Time since last scan: ${Math.round(daysDiff * 10) / 10} days ago.
+            - Previous Overall Score: ${lastScan.overallScore}
+            - Previous Acne: ${lastScan.acneActive}
+            - Previous Redness: ${lastScan.redness}
+            
+            CONTEXT AWARENESS & ENVIRONMENT CHECK:
+            1. LIGHTING & QUALITY CHECK: Analyze the image lighting. 
+               - If lighting is POOR (Dark/Blurry/Noisy): Do NOT make wild guesses. Weight your analysis heavily (70%) towards the "Previous Scores" above to ensure data stability.
+               - If lighting is HARSH (High Contrast/Direct Flash): Be lenient on "Texture" and "Pore" scores as harsh light exaggerates them.
+               - If lighting is WARM/GOLDEN: Do not mistake warm color temperature for inflammation/redness.
+            
+            2. ANOMALY DETECTION (Is it real or just a bad photo?):
+               - If "Acne" or "Redness" scores jump by >20 points in a short time (< 3 days), be skeptical. 
+               - If the face looks "too smooth" compared to history (e.g. previous Acne 40 -> now 95 in 1 day), check for MAKEUP or FILTERS. If makeup is detected, mention it in the summary and score based on visible texture bumps, not just color.
+            
+            3. OUTPUT INSTRUCTION:
+               - In your "analysisSummary", explicitly mention the environmental context if it impacts the score (e.g., "Good natural lighting helps confirm improvement" or "Low light may obscure fine details; basing score on history").
+            `;
+        } else {
+            promptContext += `
+            FIRST TIME SCAN:
+            - Analyze purely based on visual evidence.
+            - Assume standard lighting conditions unless extreme.
+            `;
+        }
+
+        promptContext += `
             OUTPUT:
             - Provide a professional clinical summary explaining the PRIMARY issue (e.g. "Barrier compromise with peeling").
             - Ensure numeric scores strictly match your visual diagnosis.
-            `;
-        }
+        `;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',

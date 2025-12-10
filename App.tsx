@@ -286,7 +286,11 @@ const App: React.FC = () => {
         />;
 
       case AppView.FACE_SCANNER:
-        return <FaceScanner key="face-scanner" onScanComplete={handleScanComplete} />;
+        return <FaceScanner 
+            key="face-scanner" 
+            onScanComplete={handleScanComplete} 
+            scanHistory={user?.scanHistory || []} 
+        />;
       
       case AppView.PRODUCT_SCANNER:
         return user ? (

@@ -7,9 +7,10 @@ import { SkinMetrics } from '../types';
 
 interface FaceScannerProps {
   onScanComplete: (metrics: SkinMetrics, image: string) => void;
+  scanHistory?: SkinMetrics[];
 }
 
-const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete }) => {
+const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -255,8 +256,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete }) => {
                   applyMedicalProcessing(ctx, w, h);
                   const processedBase64 = canvas.toDataURL('image/jpeg', 0.9);
 
-                  // Pass BOTH the image AND the local metrics to AI for consistency
-                  analyzeFaceSkin(processedBase64, localMetrics).then(aiMetrics => {
+                  // Pass image, local metrics, AND HISTORY to AI for context-aware analysis
+                  analyzeFaceSkin(processedBase64, localMetrics, scanHistory).then(aiMetrics => {
                       setAiProgress(100);
                       setTimeout(() => {
                         onScanComplete(aiMetrics, displaySnapshot);
@@ -340,8 +341,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete }) => {
            const displayImage = captureSnapshot(video, true);
            setCapturedSnapshot(displayImage);
 
-           // Pass averaged local metrics as anchor
-           analyzeFaceSkin(processedImage, avgLocalMetrics).then(aiMetrics => {
+           // Pass averaged local metrics AND HISTORY as anchor
+           analyzeFaceSkin(processedImage, avgLocalMetrics, scanHistory).then(aiMetrics => {
                setAiProgress(100);
                setTimeout(() => {
                    const finalMetrics = { ...aiMetrics };
@@ -360,7 +361,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete }) => {
     if (isScanning && !isProcessingAI) {
       requestAnimationFrame(scanFrame);
     }
-  }, [isScanning, isProcessingAI, onScanComplete]);
+  }, [isScanning, isProcessingAI, onScanComplete, scanHistory]);
 
   useEffect(() => {
     if (isScanning) {
