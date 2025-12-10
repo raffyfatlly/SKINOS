@@ -111,65 +111,61 @@ export const analyzeFaceSkin = async (
 ): Promise<SkinMetrics> => {
     return runWithRetry(async (ai) => {
         // Construct a context string with the local deterministic data
-        let promptContext = "Analyze this face for dermatological metrics (0-100). 100 is PERFECT health (no issues).";
+        let promptContext = `
+        You are a highly advanced AI Dermatologist with Context Awareness.
+        Your goal is to analyze the user's face image and provide a clinical assessment (Scores 0-100) and a "clinical verdict" summary.
         
-        if (localMetrics) {
-            promptContext += `
-            
-            PRELIMINARY COMPUTER VISION DATA (Use as baseline):
-            - Acne/Blemishes: ${localMetrics.acneActive}
-            - Redness/Sensitivity: ${localMetrics.redness}
-            - Wrinkles/Aging: ${localMetrics.wrinkleFine}
-            - Texture: ${localMetrics.texture}
-            
-            CRITICAL SCORING RULES:
-            1. DISTINGUISH PEELING VS ACNE: If you see peeling skin, flakes, or raw skin (dermatitis) but NO distinct pustules/cysts, your "Acne Score" must be HIGH (Good condition, e.g., 85+). Do NOT mark peeling as acne.
-            2. TEXTURE PENALTY: If you see peeling or roughness, the "Texture Score" must be LOW (Bad condition, e.g., < 50).
-            3. BARRIER HEALTH: If you see significant redness or peeling, the "Overall Score" MUST be penalized (e.g., < 65). Do not give a high Overall Score to damaged skin even if there are no wrinkles.
-            4. CONSISTENCY: Use the provided CV data as an anchor, but if the visual evidence clearly contradicts it (e.g. CV says Acne is 30 but it's actually peeling), OVERRIDE the CV score heavily.
-            `;
-        }
+        INPUT CONTEXT - COMPUTER VISION PRE-ANALYSIS (Use as data anchor):
+        - Acne/Blemishes Score: ${localMetrics?.acneActive || 'Unknown'} (Higher is Better)
+        - Redness/Sensitivity Score: ${localMetrics?.redness || 'Unknown'} (Higher is Better)
+        - Texture Score: ${localMetrics?.texture || 'Unknown'} (Higher is Better)
+        `;
 
-        // NEW: Contextual History Awareness
         if (history && history.length > 0) {
-            // Sort history to get the latest valid scan
             const sortedHistory = [...history].sort((a,b) => b.timestamp - a.timestamp);
             const lastScan = sortedHistory[0];
-            const daysDiff = Math.max(0, (Date.now() - lastScan.timestamp) / (1000 * 60 * 60 * 24));
+            const daysDiff = Math.abs((Date.now() - lastScan.timestamp) / (1000 * 60 * 60 * 24));
+            const daysLabel = daysDiff < 1 ? "earlier today" : `${Math.round(daysDiff)} days ago`;
 
             promptContext += `
             
-            PATIENT HISTORY (CONTEXTUAL BASELINE):
-            - Time since last scan: ${Math.round(daysDiff * 10) / 10} days ago.
+            PATIENT HISTORY (Last scan was ${daysLabel}):
             - Previous Overall Score: ${lastScan.overallScore}
-            - Previous Acne: ${lastScan.acneActive}
-            - Previous Redness: ${lastScan.redness}
+            - Previous Acne Score: ${lastScan.acneActive}
+            - Previous Redness Score: ${lastScan.redness}
+
+            INTELLIGENT CONTEXT ANALYSIS (The "Wow" Factor):
+            1. ENVIRONMENT & LIGHTING CHECK: 
+               - If the photo is DIM, BLURRY, or has EXTREME SHADOWS: Do NOT trust the visual improvements fully. Anchor your scores heavily (70% weight) to the "Previous" scores.
+               - If the photo is HIGH QUALITY: Trust your visual analysis (80% weight).
             
-            CONTEXT AWARENESS & ENVIRONMENT CHECK:
-            1. LIGHTING & QUALITY CHECK: Analyze the image lighting. 
-               - If lighting is POOR (Dark/Blurry/Noisy): Do NOT make wild guesses. Weight your analysis heavily (70%) towards the "Previous Scores" above to ensure data stability.
-               - If lighting is HARSH (High Contrast/Direct Flash): Be lenient on "Texture" and "Pore" scores as harsh light exaggerates them.
-               - If lighting is WARM/GOLDEN: Do not mistake warm color temperature for inflammation/redness.
-            
-            2. ANOMALY DETECTION (Is it real or just a bad photo?):
-               - If "Acne" or "Redness" scores jump by >20 points in a short time (< 3 days), be skeptical. 
-               - If the face looks "too smooth" compared to history (e.g. previous Acne 40 -> now 95 in 1 day), check for MAKEUP or FILTERS. If makeup is detected, mention it in the summary and score based on visible texture bumps, not just color.
-            
-            3. OUTPUT INSTRUCTION:
-               - In your "analysisSummary", explicitly mention the environmental context if it impacts the score (e.g., "Good natural lighting helps confirm improvement" or "Low light may obscure fine details; basing score on history").
+            2. REALITY CHECK (Anomaly Detection):
+               - If "Acne" or "Redness" scores improved by >25 points in <2 days: This is physiologically impossible without makeup, filters, or extreme lighting changes. 
+               - ACTION: Be skeptical. If the skin looks "too perfect" compared to history, assume **makeup** or **blur filters**.
+               - SCORING: If you suspect makeup, penalize "Texture" and "Pore" scores to be realistic. Do not give 95+ just because foundation covered the redness.
+
+            3. COMPARISON LOGIC:
+               - Compare current state to history. Is it better? Worse? The same?
+               - If stable, highlight consistency.
+               - If significantly changed (and it looks real), celebrate it.
             `;
         } else {
-            promptContext += `
-            FIRST TIME SCAN:
-            - Analyze purely based on visual evidence.
-            - Assume standard lighting conditions unless extreme.
-            `;
+             promptContext += `
+             FIRST SCAN CONTEXT:
+             - Establish a baseline. 
+             - Analyze lighting: If poor, mention in summary that "better lighting might reveal more detail next time" but keep it brief.
+             `;
         }
 
         promptContext += `
-            OUTPUT:
-            - Provide a professional clinical summary explaining the PRIMARY issue (e.g. "Barrier compromise with peeling").
-            - Ensure numeric scores strictly match your visual diagnosis.
+        VERDICT WRITING RULES (For 'analysisSummary'):
+        1. STYLE: Easy to read, conversational, impactful. "Clinical verdict" but not robotic. 
+        2. BOLDING: You MUST use Markdown **bold** for the specific metrics, skin concerns, or findings that stand out.
+        3. CONTENT FOCUS:
+           - If there is a "weird" anomaly (e.g. huge score jump in 1 day), mention the context tactfully: "Your skin looks incredible today, though the **different lighting** might be softening the texture compared to yesterday."
+           - If normal, focus on the main data: "Your **redness** has calmed down significantly."
+           - DO NOT mention lighting/environment unless it is distorting the data or explaining a weird anomaly.
+           - Keep it under 2 sentences.
         `;
 
         const response = await ai.models.generateContent({
@@ -220,9 +216,11 @@ export const analyzeFaceSkin = async (
 
         const blend = (local: number, ai: number) => Math.round((local * 0.20) + (ai * 0.80));
         
+        // Use AI scores directly for critical metrics if history logic applied, otherwise blend
         const finalMetrics: SkinMetrics = localMetrics ? {
             ...aiData,
             overallScore: blend(localMetrics.overallScore, aiData.overallScore),
+            // We trust AI more for these complex texture analyses
             acneActive: blend(localMetrics.acneActive, aiData.acneActive),
             acneScars: blend(localMetrics.acneScars, aiData.acneScars),
             poreSize: blend(localMetrics.poreSize, aiData.poreSize),
