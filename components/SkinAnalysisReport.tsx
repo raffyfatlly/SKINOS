@@ -343,10 +343,27 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
       let verdictText = "";
       let title = "";
       
-      if (Math.abs(diff) < 2) {
-          title = "Stable Condition";
-          verdictText = "Your skin metrics are consistent. No significant reactions detected from recent routine changes.";
-          return { status: "Stable", trend, verdictTitle: title, verdictText, color: "text-zinc-500 bg-zinc-50 border-zinc-200" };
+      // Changed threshold to < 5 (roughly 4%) to be more lenient on "stability"
+      if (Math.abs(diff) < 5) {
+          let status = "Steady";
+          let color = "text-zinc-500 bg-zinc-50 border-zinc-200";
+
+          // Context-aware titles to avoid saying "Stable" when condition is bad
+          if (metrics.overallScore > 80) {
+              title = "Health Maintained";
+              status = "Maintained";
+              color = "text-emerald-700 bg-emerald-50 border-emerald-100";
+          } else if (metrics.overallScore < 60) {
+              title = "Condition Persistent";
+              status = "Persistent";
+              color = "text-amber-700 bg-amber-50 border-amber-100";
+          } else {
+              title = "Consistent State";
+              status = "Consistent";
+          }
+          
+          verdictText = "Your skin metrics are hovering in the same range. No significant reactions or major improvements detected recently.";
+          return { status: status, trend, verdictTitle: title, verdictText, color: color };
       }
 
       const improved = diff > 0;

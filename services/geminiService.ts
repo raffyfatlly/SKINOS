@@ -2,6 +2,25 @@
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
+// --- CACHING SYSTEM FOR 100% CONSISTENCY ---
+// Map to store results of identical images: Hash -> SkinMetrics
+const ANALYSIS_CACHE = new Map<string, SkinMetrics>();
+
+/**
+ * Simple string hash function to fingerprint image data.
+ * This ensures if the exact same file is uploaded, we return the exact same result.
+ */
+const hashString = (str: string): string => {
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
+};
+
 // Initialize the Google GenAI client
 // SECURITY: Supports VITE_API_KEY (Standard) and API_KEY (Legacy/Injected)
 const getAI = () => {
@@ -109,84 +128,47 @@ export const analyzeFaceSkin = async (
     localMetrics?: SkinMetrics, 
     history?: SkinMetrics[]
 ): Promise<SkinMetrics> => {
+    // 1. CHECK CACHE (Consistency God Mode)
+    const imageHash = hashString(imageBase64);
+    if (ANALYSIS_CACHE.has(imageHash)) {
+        console.log("Returning cached analysis for identical image.");
+        return { ...ANALYSIS_CACHE.get(imageHash)!, timestamp: Date.now() };
+    }
+
     return runWithRetry(async (ai) => {
-        // Construct a context string with the local deterministic data
-        let promptContext = `
-        You are a highly advanced AI Dermatologist with Context Awareness.
-        Your goal is to analyze the user's face image and provide a clinical assessment (Scores 0-100) and a "clinical verdict" summary.
         
-        INPUT CONTEXT - COMPUTER VISION PRE-ANALYSIS (Use as data anchor):
-        - Acne/Blemishes Score: ${localMetrics?.acneActive || 'Unknown'} (Higher is Better)
-        - Redness/Sensitivity Score: ${localMetrics?.redness || 'Unknown'} (Higher is Better)
-        - Texture Score: ${localMetrics?.texture || 'Unknown'} (Higher is Better)
+        // 2. HYBRID VALIDATION PROMPT
+        // We feed the precise CV metrics to the AI.
+        // We tell it to TRUST these metrics unless it sees a massive conflict.
         
-        CRITICAL SCORING GUIDE (Scale 0-100, where 100 is PERFECT):
-        - 90-100: Excellent / Clear (No visible issues). Verdict must be POSITIVE.
-        - 80-89: Good (Minor issues). Verdict should be mostly POSITIVE.
-        - 60-79: Average (Visible issues). Verdict should be NEUTRAL/CONSTRUCTIVE.
-        - 0-59: Poor / Critical (Severe issues). Verdict should be URGENT/CORRECTIVE.
+        const metricString = localMetrics ? JSON.stringify({
+            acne: localMetrics.acneActive,
+            redness: localMetrics.redness,
+            wrinkles: localMetrics.wrinkleFine,
+            texture: localMetrics.texture,
+            hydration: localMetrics.hydration
+        }) : "Not Available";
+
+        const promptContext = `
+        You are a Senior Dermatologist. 
+        We have performed a Computer Vision analysis (using Sobel/Lab/Laplacian kernels) on this face.
         
-        MANDATORY CONSISTENCY CHECK:
-        - If 'acneActive' is > 85, you MUST NOT say "Acne is critical" or "Breakouts detected". You must say "Skin is clear" or "No active acne".
-        - If 'redness' is > 85, you MUST NOT say "High inflammation". You must say "Skin tone is even".
-        - Your 'analysisSummary' text MUST MATCH the numbers generated. Do not invent problems if the scores are high.
+        CV METRICS (0-100 Scale, 100=Perfect):
+        ${metricString}
         
-        SELF-CORRECTION RULE (Priority #1):
-        - If you see visible acne, redness, or issues, you MUST output a low score (<70) for that metric, even if the "Computer Vision" score above is high. 
-        - IGNORE the computer vision score if it contradicts your visual analysis of a severe issue.
-        - If you write words like 'severe', 'critical', 'breakout', or 'inflamed' in the summary, the corresponding score MUST be below 60. Do not output 90.
-        `;
-
-        if (history && history.length > 0) {
-            const sortedHistory = [...history].sort((a,b) => b.timestamp - a.timestamp);
-            const lastScan = sortedHistory[0];
-            const daysDiff = Math.abs((Date.now() - lastScan.timestamp) / (1000 * 60 * 60 * 24));
-            const daysLabel = daysDiff < 1 ? "earlier today" : `${Math.round(daysDiff)} days ago`;
-
-            promptContext += `
-            
-            PATIENT HISTORY (Last scan was ${daysLabel}):
-            - Previous Overall Score: ${lastScan.overallScore}
-            - Previous Acne Score: ${lastScan.acneActive}
-            - Previous Redness Score: ${lastScan.redness}
-
-            INTELLIGENT CONTEXT ANALYSIS (The "Wow" Factor):
-            1. ENVIRONMENT & LIGHTING CHECK: 
-               - If the photo is DIM, BLURRY, or has EXTREME SHADOWS: Do NOT trust the visual improvements fully. Anchor your scores heavily (70% weight) to the "Previous" scores.
-               - If the photo is HIGH QUALITY: Trust your visual analysis (80% weight).
-            
-            2. REALITY CHECK (Anomaly Detection):
-               - If "Acne" or "Redness" scores improved by >25 points in <2 days: This is physiologically impossible without makeup, filters, or extreme lighting changes. 
-               - ACTION: Be skeptical. If the skin looks "too perfect" compared to history, assume **makeup** or **blur filters**.
-               - SCORING: If you suspect makeup, penalize "Texture" and "Pore" scores to be realistic. Do not give 95+ just because foundation covered the redness.
-
-            3. COMPARISON LOGIC:
-               - Compare current state to history. Is it better? Worse? The same?
-               - If stable, highlight consistency.
-               - If significantly changed (and it looks real), celebrate it.
-            `;
-        } else {
-             promptContext += `
-             FIRST SCAN CONTEXT:
-             - Establish a baseline. 
-             - Analyze lighting: If poor, mention in summary that "better lighting might reveal more detail next time" but keep it brief.
-             `;
-        }
-
-        promptContext += `
-        VERDICT WRITING RULES (For 'analysisSummary'):
-        1. STYLE: Direct, insightful, and "human-like". Avoid generic medical jargon. 
-        2. BOLDING STRATEGY (Use Markdown **text**):
-           - If a metric is GOOD (>85), bold the POSITIVE attribute (e.g., "**Clear Skin**", "**Healthy Barrier**").
-           - If a metric is BAD (<60), bold the PROBLEM (e.g., "**Active Breakouts**", "**Inflammation**").
-           - Do NOT bold "Acne" if the score is 95. That is confusing.
-        3. CONTEXT AWARENESS (The "Wow" Moment):
-           - If scores jump drastically overnight (better or worse), ACKNOWLEDGE it immediately. e.g., "Your acne score jumped up, but since it's only been 24 hours, this might be due to **different lighting**." or "Incredible recovery on the **inflammation**—that soothing serum is working fast."
-           - If lighting is bad, mention it casually: "The lighting is a bit **dim**, so I'm relying on your history to fill in the blanks."
-           - If consistent: "Your skin barrier is holding **steady**."
-        4. CONTENT FOCUS:
-           - Focus on the main data changes.
-           - Keep it under 2 sentences.
+        YOUR TASK:
+        Validate and finalize these scores. The CV algorithms are mathematically consistent but can be fooled by hair or shadows.
+        
+        RULES:
+        1. BASELINE: Start with the CV Metrics provided above. 
+        2. VALIDATE: Look at the image. Do the numbers match reality?
+           - If CV says Acne=30 (Severe) but skin looks clear -> Correct it upwards.
+           - If CV says Acne=90 (Clear) but you see spots -> Correct it downwards.
+           - If CV seems roughly correct -> KEEP THE CV SCORE. Do not change it arbitrarily.
+        3. CONSISTENCY: Do not round numbers. Precision (e.g. 73) is better than rounding (e.g. 75).
+        
+        Generate specific observation notes for key areas.
+        Return JSON.
         `;
 
         const response = await ai.models.generateContent({
@@ -198,7 +180,8 @@ export const analyzeFaceSkin = async (
                 ]
             },
             config: {
-                temperature: 0, // CRITICAL: Force deterministic output
+                temperature: 0.1,      // Low temp for stability
+                topK: 32,
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -218,6 +201,7 @@ export const analyzeFaceSkin = async (
                         oiliness: { type: Type.NUMBER },
                         darkCircles: { type: Type.NUMBER },
                         analysisSummary: { type: Type.STRING },
+                        skinAge: { type: Type.NUMBER },
                         observations: { 
                             type: Type.OBJECT, 
                             properties: {
@@ -235,35 +219,13 @@ export const analyzeFaceSkin = async (
         const aiData = JSON.parse(response.text || "{}");
         if (!aiData.overallScore) throw new Error("Invalid AI Response");
 
-        // Trust AI Scores more if there's a large discrepancy indicating the local vision missed something
-        const trustAI = (local: number, ai: number) => {
-             // If AI says 50 (Bad) and Local says 90 (Good), assume Local missed the issue -> Trust AI (e.g. 55)
-             if (local > 80 && ai < 60) return Math.round((local * 0.1) + (ai * 0.9));
-             // If AI says 90 (Good) and Local says 50 (Bad), assume AI hallucinated clarity or Local is strict -> Blend normally
-             return Math.round((local * 0.20) + (ai * 0.80));
-        };
-        
-        // Use AI scores directly for critical metrics if history logic applied, otherwise blend
-        const finalMetrics: SkinMetrics = localMetrics ? {
+        const finalMetrics: SkinMetrics = {
             ...aiData,
-            overallScore: trustAI(localMetrics.overallScore, aiData.overallScore),
-            // We trust AI more for these complex texture analyses, but check for conflicts
-            acneActive: trustAI(localMetrics.acneActive, aiData.acneActive),
-            acneScars: trustAI(localMetrics.acneScars, aiData.acneScars),
-            poreSize: trustAI(localMetrics.poreSize, aiData.poreSize),
-            blackheads: trustAI(localMetrics.blackheads, aiData.blackheads),
-            wrinkleFine: trustAI(localMetrics.wrinkleFine, aiData.wrinkleFine),
-            wrinkleDeep: trustAI(localMetrics.wrinkleDeep, aiData.wrinkleDeep),
-            sagging: trustAI(localMetrics.sagging, aiData.sagging),
-            pigmentation: trustAI(localMetrics.pigmentation, aiData.pigmentation),
-            redness: trustAI(localMetrics.redness, aiData.redness),
-            texture: trustAI(localMetrics.texture, aiData.texture),
-            hydration: trustAI(localMetrics.hydration, aiData.hydration),
-            oiliness: trustAI(localMetrics.oiliness, aiData.oiliness),
-            darkCircles: trustAI(localMetrics.darkCircles, aiData.darkCircles),
-            skinAge: aiData.skinAge || localMetrics.skinAge,
             timestamp: Date.now()
-        } : { ...aiData, timestamp: Date.now() };
+        };
+
+        // SAVE TO CACHE
+        ANALYSIS_CACHE.set(imageHash, finalMetrics);
 
         return finalMetrics;
 
@@ -419,160 +381,175 @@ export const analyzeShelfHealth = (products: Product[], user: UserProfile) => {
     const conflicts: string[] = [];
     const hasRetinol = products.some(p => p.ingredients.some(i => i.includes('Retinol') || i.includes('Retinal')));
     const hasAHA = products.some(p => p.ingredients.some(i => ['Glycolic Acid', 'Lactic Acid'].includes(i)));
-    if (hasRetinol && hasAHA) conflicts.push("Retinol + AHA (Irritation Risk)");
+    const hasBHA = products.some(p => p.ingredients.some(i => ['Salicylic Acid', 'BHA'].includes(i)));
+    const hasVitC = products.some(p => p.ingredients.some(i => ['Vitamin C', 'Ascorbic Acid'].includes(i)));
+    const hasBenzoyl = products.some(p => p.ingredients.some(i => ['Benzoyl Peroxide'].includes(i)));
 
-    const riskyProducts = products.filter(p => auditProduct(p, user).warnings.length > 0)
-                                  .map(p => ({ name: p.name, reason: auditProduct(p, user).warnings[0].reason }));
+    if (hasRetinol && hasAHA) conflicts.push('Retinol + AHA (High Irritation Risk)');
+    if (hasRetinol && hasBHA) conflicts.push('Retinol + BHA (High Irritation Risk)');
+    if (hasRetinol && hasVitC) conflicts.push('Retinol + Vitamin C (Use AM/PM)');
+    if (hasRetinol && hasBenzoyl) conflicts.push('Retinol + Benzoyl Peroxide (Deactivates Retinol)');
+    if (hasAHA && hasVitC) conflicts.push('AHA + Vitamin C (pH Conflict)');
 
     // Redundancies
-    const typeCounts = categories.reduce((acc, type) => {
-        acc[type] = (acc[type] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-    const redundancies = Object.keys(typeCounts).filter(t => typeCounts[t] > 2).map(t => `Too many ${t}s`);
+    const redundancies: string[] = [];
+    const cleanserCount = products.filter(p => p.type === 'CLEANSER').length;
+    if (cleanserCount > 2) redundancies.push('Multiple Cleansers');
+    const spfCount = products.filter(p => p.type === 'SPF').length;
+    if (spfCount > 1) redundancies.push('Multiple SPFs');
+
+    // Risky Products (Based on User Profile)
+    const riskyProducts: { name: string, reason: string }[] = [];
+    products.forEach(p => {
+        const audit = auditProduct(p, user);
+        if (audit.warnings.length > 0) {
+            riskyProducts.push({ name: p.name, reason: audit.warnings[0].reason });
+        }
+    });
+
+    // Upgrades
+    const upgrades: string[] = [];
+    if (user.biometrics.hydration < 50 && !products.some(p => p.ingredients.includes('Hyaluronic Acid') || p.ingredients.includes('Ceramides'))) {
+        upgrades.push('Hydrating Serum');
+    }
+    if ((user.biometrics.wrinkleFine < 70 || user.biometrics.wrinkleDeep < 70) && !hasRetinol) {
+        upgrades.push('Retinol/Peptides');
+    }
 
     // Grade
     let grade = 'B';
-    if (missing.length === 0 && conflicts.length === 0 && riskyProducts.length === 0) grade = 'A';
-    if (grade === 'A' && treatment > 50) grade = 'S';
-    if (riskyProducts.length > 0 || conflicts.length > 0) grade = 'C';
+    const totalIssues = missing.length + conflicts.length + riskyProducts.length;
+    if (totalIssues === 0 && products.length >= 3) grade = 'S';
+    else if (totalIssues === 0) grade = 'A';
+    else if (totalIssues > 2) grade = 'D';
+    else if (totalIssues > 0) grade = 'C';
 
     return {
         analysis: {
             grade,
             missing,
             conflicts,
-            riskyProducts,
             redundancies,
-            upgrades: riskyProducts.length > 0 ? [riskyProducts[0].name] : [],
-            balance: { exfoliation, hydration, protection, treatment }
-        }
-    };
-};
-
-// Buying Decision Logic
-export const getBuyingDecision = (product: Product, currentShelf: Product[], user: UserProfile) => {
-    const audit = auditProduct(product, user);
-    const context = analyzeProductContext(product, currentShelf);
-    
-    // Decision Logic
-    let decision: 'BUY' | 'AVOID' | 'SWAP' | 'COMPARE' = 'COMPARE';
-    let title = "Compare";
-    let description = "Scores similarly to your current routine.";
-    let color = "zinc";
-
-    if (audit.warnings.length > 0) {
-        decision = 'AVOID';
-        title = "Avoid";
-        description = "Contains ingredients that clash with your skin profile.";
-        color = "rose";
-    } else if (context.conflicts.length > 0) {
-        decision = 'AVOID';
-        title = "Conflict";
-        description = `Clashes with ${context.conflicts.join(', ')} in your shelf.`;
-        color = "amber";
-    } else if (context.existingSameType.length > 0) {
-        const current = context.existingSameType[0];
-        const currentAudit = auditProduct(current, user);
-        
-        if (audit.adjustedScore > currentAudit.adjustedScore + 10) {
-            decision = 'SWAP';
-            title = "Upgrade";
-            description = `Better match than your ${current.name}.`;
-            color = "emerald";
-        } else {
-            decision = 'COMPARE';
-            title = "Duplicate";
-            description = `You already have ${current.name}. This isn't a significant upgrade.`;
-            color = "zinc";
-        }
-    } else if (audit.adjustedScore > 85) {
-        decision = 'BUY';
-        title = "Excellent";
-        description = "Great addition! Fills a gap in your routine.";
-        color = "emerald";
-    }
-
-    return {
-        verdict: { decision, title, description, color },
-        audit,
-        shelfConflicts: context.conflicts,
-        existingSameType: context.existingSameType,
-        comparison: {
-            result: decision === 'SWAP' ? 'BETTER' : decision === 'COMPARE' ? 'SIMILAR' : 'WORSE',
-            diff: 0
+            riskyProducts,
+            upgrades,
+            balance: {
+                exfoliation: Math.min(100, exfoliation),
+                hydration: Math.min(100, hydration),
+                protection: Math.min(100, protection),
+                treatment: Math.min(100, treatment)
+            }
         }
     };
 };
 
 export const analyzeProductContext = (product: Product, shelf: Product[]) => {
-    const conflicts = [];
+    const typeCount = shelf.filter(p => p.type === product.type).length;
     
-    // Check Conflicts with Shelf
-    if (product.ingredients.some(i => i.includes('Retinol'))) {
-        if (shelf.some(p => p.ingredients.some(i => ['Glycolic Acid', 'Salicylic Acid'].includes(i)))) {
-            conflicts.push("Exfoliating Acids");
-        }
-    }
+    const conflicts: string[] = [];
+    const pIngs = product.ingredients.join(' ').toLowerCase();
+    
+    // Check conflicts against shelf
+    shelf.forEach(item => {
+        const sIngs = item.ingredients.join(' ').toLowerCase();
+        
+        if (pIngs.includes('retinol') && sIngs.includes('acid') && !sIngs.includes('hyaluronic')) conflicts.push(`Retinol (New) vs Acids in ${item.name}`);
+        if (pIngs.includes('acid') && !pIngs.includes('hyaluronic') && sIngs.includes('retinol')) conflicts.push(`Acids (New) vs Retinol in ${item.name}`);
+        if (pIngs.includes('benzoyl') && sIngs.includes('retinol')) conflicts.push(`Benzoyl (New) vs Retinol in ${item.name}`);
+    });
 
-    // Check Redundancy
+    return { typeCount, conflicts };
+};
+
+export const getBuyingDecision = (product: Product, shelf: Product[], user: UserProfile) => {
+    const audit = auditProduct(product, user);
+    const context = analyzeProductContext(product, shelf);
+    
     const existingSameType = shelf.filter(p => p.type === product.type);
     
-    return {
-        conflicts,
-        existingSameType,
-        typeCount: existingSameType.length
-    };
+    // Compare Suitability
+    let comparison = { result: 'NEUTRAL', diff: 0 };
+    if (existingSameType.length > 0) {
+        const bestExisting = existingSameType.reduce((prev, current) => (prev.suitabilityScore > current.suitabilityScore) ? prev : current);
+        const diff = product.suitabilityScore - bestExisting.suitabilityScore;
+        comparison = { 
+            result: diff > 5 ? 'BETTER' : diff < -5 ? 'WORSE' : 'NEUTRAL',
+            diff 
+        };
+    }
+
+    let decision = 'CONSIDER';
+    let title = 'Maybe';
+    let description = 'This product is okay, but check for better options.';
+    let color = 'zinc';
+
+    if (audit.warnings.length > 0) {
+        decision = 'AVOID';
+        title = 'Bad Match';
+        description = 'Contains ingredients that conflict with your skin profile.';
+        color = 'rose';
+    } else if (context.conflicts.length > 0) {
+        decision = 'CAUTION';
+        title = 'Routine Conflict';
+        description = 'Good product, but conflicts with your current routine.';
+        color = 'amber';
+    } else if (comparison.result === 'WORSE') {
+        decision = 'PASS';
+        title = 'Downgrade';
+        description = `Your current ${product.type.toLowerCase()} is better suited for you.`;
+        color = 'zinc';
+    } else if (product.suitabilityScore > 85 && comparison.result === 'BETTER') {
+        decision = 'SWAP';
+        title = 'Upgrade';
+        description = 'Excellent match! Better than what you currently use.';
+        color = 'emerald';
+    } else if (product.suitabilityScore > 80) {
+        decision = 'BUY';
+        title = 'Great Find';
+        description = 'Highly compatible with your skin biometric needs.';
+        color = 'emerald';
+    }
+
+    return { verdict: { decision, title, description, color }, audit, shelfConflicts: context.conflicts, existingSameType, comparison };
 };
 
 export const getClinicalTreatmentSuggestions = (user: UserProfile) => {
     const metrics = user.biometrics;
-    const suggestions = [];
+    const suggestions: { name: string, type: 'FACIAL' | 'LASER' | 'TREATMENT', benefit: string, downtime: string }[] = [];
 
-    if (metrics.acneActive < 60 || metrics.poreSize < 60) {
-        suggestions.push({
-            name: "Salicylic Acid Peel",
-            type: "TREATMENT",
-            benefit: "Deep pore cleaning and acne reduction.",
-            downtime: "1-2 Days"
-        });
+    // Acne
+    if (metrics.acneActive < 70) {
+        suggestions.push({ name: 'Salicylic Acid Peel', type: 'FACIAL', benefit: 'Deep pore cleansing and bacteria reduction.', downtime: '1-2 Days' });
+        suggestions.push({ name: 'Blue Light Therapy', type: 'TREATMENT', benefit: 'Kills acne bacteria without irritation.', downtime: 'None' });
     }
-    
-    if (metrics.texture < 60 || metrics.acneScars < 70) {
-        suggestions.push({
-            name: "Microneedling",
-            type: "TREATMENT",
-            benefit: "Collagen induction for scars and texture.",
-            downtime: "3-5 Days"
-        });
+    // Scars/Texture
+    if (metrics.texture < 70 || metrics.acneScars < 70) {
+        suggestions.push({ name: 'Microneedling (PRP)', type: 'TREATMENT', benefit: 'Boosts collagen to smooth scars and texture.', downtime: '3-4 Days' });
+        suggestions.push({ name: 'Fractional CO2 Laser', type: 'LASER', benefit: 'Resurfaces skin for deep smoothing.', downtime: '5-7 Days' });
     }
-
-    if (metrics.hydration < 50) {
-        suggestions.push({
-            name: "Hydrafacial",
-            type: "FACIAL",
-            benefit: "Deep hydration and gentle exfoliation.",
-            downtime: "None"
-        });
+    // Pigmentation
+    if (metrics.pigmentation < 70) {
+        suggestions.push({ name: 'IPL Photofacial', type: 'LASER', benefit: 'Targets sun spots and uneven tone.', downtime: '1-2 Days' });
+        suggestions.push({ name: 'Chemical Peel (TCA)', type: 'FACIAL', benefit: 'Removes pigmented top layers.', downtime: '3-5 Days' });
     }
-
+    // Aging/Sagging
+    if (metrics.wrinkleDeep < 70 || metrics.sagging < 70) {
+        suggestions.push({ name: 'HIFU / Ultherapy', type: 'TREATMENT', benefit: 'Non-surgical lifting and tightening.', downtime: 'None' });
+        suggestions.push({ name: 'Radiofrequency', type: 'TREATMENT', benefit: 'Firms skin and stimulates collagen.', downtime: 'None' });
+    }
+    // Redness
     if (metrics.redness < 60) {
-        suggestions.push({
-            name: "LED Therapy (Red/Yellow)",
-            type: "FACIAL",
-            benefit: "Reduces inflammation and promotes healing.",
-            downtime: "None"
-        });
+        suggestions.push({ name: 'V-Beam Laser', type: 'LASER', benefit: 'Targets blood vessels to reduce redness.', downtime: '1-3 Days' });
+        suggestions.push({ name: 'Azelaic Acid Facial', type: 'FACIAL', benefit: 'Calms inflammation and rosacea.', downtime: 'None' });
+    }
+    // Hydration (General)
+    if (metrics.hydration < 60) {
+        suggestions.push({ name: 'HydraFacial', type: 'FACIAL', benefit: 'Deep hydration and gentle exfoliation.', downtime: 'None' });
     }
 
-    // Default if skin is good
+    // Default if skin is perfect
     if (suggestions.length === 0) {
-        suggestions.push({
-            name: "Maintenance Glow Facial",
-            type: "FACIAL",
-            benefit: "Maintains skin barrier and radiance.",
-            downtime: "None"
-        });
+        suggestions.push({ name: 'Custom Maintenance Facial', type: 'FACIAL', benefit: 'Deep cleaning and hydration maintenance.', downtime: 'None' });
+        suggestions.push({ name: 'LED Light Therapy', type: 'TREATMENT', benefit: 'General collagen boost and glow.', downtime: 'None' });
     }
 
     return suggestions.slice(0, 3);
