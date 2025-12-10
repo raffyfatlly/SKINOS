@@ -198,7 +198,7 @@ const MetricModal: React.FC<MetricModalProps> = ({ metric, score, age, observati
 
                  <div className="text-center mb-10 mt-4 tech-reveal">
                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{getDisplayTerm(metric)}</span>
-                     <h2 className="text-7xl font-black text-zinc-900 mt-4 mb-4 tracking-tighter">{score}</h2>
+                     <h2 className="text-7xl font-black text-zinc-900 mt-4 mb-4 tracking-tighter">{Math.round(score)}</h2>
                      <span className={`inline-block px-4 py-1.5 rounded-full text-xs font-bold tracking-wide ${score > avg ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                          {performance}
                      </span>
@@ -207,7 +207,7 @@ const MetricModal: React.FC<MetricModalProps> = ({ metric, score, age, observati
                  <div className="mb-10 tech-reveal delay-100">
                      <div className="flex justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">
                          <span>Peer Average ({avg})</span>
-                         <span>You ({score})</span>
+                         <span>You ({Math.round(score)})</span>
                      </div>
                      <div className="h-3 bg-zinc-100 rounded-full overflow-hidden relative">
                          <div className="absolute top-0 bottom-0 w-0.5 bg-zinc-400 z-10" style={{ left: `${avg}%` }} />
@@ -777,7 +777,7 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
                      <div className="flex gap-6 mt-6 border-t border-white/10 pt-4 tech-reveal delay-100">
                         <div>
                              <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Overall</span>
-                             <span className="text-xl font-black text-white">{metrics.overallScore}</span>
+                             <span className="text-xl font-black text-white">{Math.round(metrics.overallScore)}</span>
                         </div>
                         <div>
                              <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Priority</span>
@@ -786,7 +786,6 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
                         <div>
                              <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Skin Type</span>
                              <span className="text-xl font-black text-white flex items-center gap-1.5">
-                                <Fingerprint size={18} className="text-teal-400" />
                                 {calculatedSkinType.split('+')[0].trim()}
                              </span>
                         </div>

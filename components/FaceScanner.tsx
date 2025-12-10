@@ -188,7 +188,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
           ctx.drawImage(source, 0, 0, captureCanvas.width, captureCanvas.height);
           if (flip) ctx.setTransform(1, 0, 0, 1, 0, 0);
           
-          // Apply Clinical Overlay Logic (Lines + Dots) - this uses the 'medical processing' internally
+          // Apply Clinical Overlay Logic (Lines + Dots) for Display
           applyClinicalOverlays(ctx, captureCanvas.width, captureCanvas.height);
           
           return captureCanvas.toDataURL('image/jpeg', 0.95);
@@ -196,8 +196,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
       return '';
   };
   
-  // Capture image for AI Analysis - NOW WITH ENHANCED EFFECTS
-  const captureProcessedImage = (source: HTMLVideoElement | HTMLImageElement, flip: boolean): string => {
+  // Capture Raw High-Quality Image for AI Analysis (No filters)
+  const captureRawImage = (source: HTMLVideoElement | HTMLImageElement, flip: boolean): string => {
       const captureCanvas = document.createElement('canvas');
       const width = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
       const height = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
@@ -212,9 +212,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
           ctx.drawImage(source, 0, 0, width, height);
           if (flip) ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-          // Apply High Contrast, Red Boost, Sharpening
-          applyMedicalProcessing(ctx, width, height);
-
+          // NOTE: Do NOT apply applyMedicalProcessing here. 
+          // We want the AI to see the raw, natural skin for best accuracy.
           return captureCanvas.toDataURL('image/jpeg', 0.95);
       }
       return '';
@@ -250,14 +249,13 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
                   applyClinicalOverlays(ctx, w, h);
                   const displaySnapshot = canvas.toDataURL('image/jpeg', 0.9);
                   
-                  // Re-draw original for processing
+                  // Re-draw original for AI processing
                   ctx.drawImage(img, 0, 0, w, h);
-                  // Apply medical filters for AI
-                  applyMedicalProcessing(ctx, w, h);
-                  const processedBase64 = canvas.toDataURL('image/jpeg', 0.9);
+                  // Raw image to AI for best context
+                  const rawBase64 = canvas.toDataURL('image/jpeg', 0.95);
 
                   // Pass image, local metrics, AND HISTORY to AI for context-aware analysis
-                  analyzeFaceSkin(processedBase64, localMetrics, scanHistory).then(aiMetrics => {
+                  analyzeFaceSkin(rawBase64, localMetrics, scanHistory).then(aiMetrics => {
                       setAiProgress(100);
                       setTimeout(() => {
                         onScanComplete(aiMetrics, displaySnapshot);
@@ -335,8 +333,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
            setIsScanning(false);
            setIsProcessingAI(true);
            
-           // Capture Processed Image (Contrast, Red, Sharpness) for AI
-           const processedImage = captureProcessedImage(video, true);
+           // Capture Raw Image (No Medical Filters) for AI - Better for Acne detection
+           const rawImage = captureRawImage(video, true);
            const avgLocalMetrics = calculateAverageMetrics(metricsBuffer.current);
            
            // Generate Image with Clinical Overlay for Display
@@ -344,7 +342,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
            setCapturedSnapshot(displayImage);
 
            // Pass averaged local metrics AND HISTORY as anchor
-           analyzeFaceSkin(processedImage, avgLocalMetrics, scanHistory).then(aiMetrics => {
+           analyzeFaceSkin(rawImage, avgLocalMetrics, scanHistory).then(aiMetrics => {
                setAiProgress(100);
                setTimeout(() => {
                    const finalMetrics = { ...aiMetrics };

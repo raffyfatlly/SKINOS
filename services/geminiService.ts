@@ -139,8 +139,7 @@ export const analyzeFaceSkin = async (
     return runWithRetry(async (ai) => {
         
         // 2. HYBRID VALIDATION PROMPT
-        // We feed the precise CV metrics to the AI.
-        // We tell it to TRUST these metrics unless it sees a massive conflict.
+        // Use CV metrics as a "hint" but trust Gemini's vision more.
         
         const metricString = localMetrics ? JSON.stringify({
             acne: localMetrics.acneActive,
@@ -152,21 +151,22 @@ export const analyzeFaceSkin = async (
         }) : "Not Available";
 
         const promptContext = `
-        You are a Senior Dermatologist. 
-        We have performed a highly accurate Computer Vision analysis (averaged over 30 video frames) on this face.
+        You are a Senior Dermatologist. Analyze this high-resolution photo.
         
-        CV METRICS (0-100 Scale, 100=Perfect):
+        REFERENCE CV ESTIMATES (Use these as a baseline only, do not blindly trust them):
         ${metricString}
         
         YOUR TASK:
-        Validate the CV data.
+        Perform a visual assessment of the skin.
         
-        RULES FOR CONSISTENCY:
-        1. PRIMARY TRUTH: The CV metrics provided are mathematically stable time-averages. You must PRIORITIZE them.
-        2. NO HALLUCINATION: Do not invent scores. If the image supports the CV data, OUTPUT THE CV DATA EXACTLY.
-        3. DEVIATION: Only change a score if there is a gross error (e.g. CV says Acne=20 (Severe) but face is visibly clear). 
-           If the CV score is reasonable, keep it. Do not "tweak" it by 1-2 points.
-        4. FORMAT: All scores must be INTEGERS. No decimals.
+        RULES FOR ACCURACY & CONSISTENCY:
+        1. PRIMARY TRUTH: Trust your own visual analysis of the image. The CV estimates can be wrong (e.g., if CV says 99 but you see acne, score it low).
+        2. BE CRITICAL: If you see acne bumps, redness, or dark spots, penalize the scores accordingly. Do not hallucinate perfection.
+        3. CONSISTENCY: Return stable integer scores.
+        4. SCALE: 0 = Severe Issues, 100 = Flawless/Perfect.
+           - Acne 90+ means almost clear. 50 means moderate breakouts.
+           - Redness 90+ means even tone. 50 means visible inflammation.
+        5. OUTPUT: Return strictly INTEGER scores (no decimals).
         
         Generate specific observation notes for key areas.
         Return JSON.
