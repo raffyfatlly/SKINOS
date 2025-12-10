@@ -71,13 +71,20 @@ const App: React.FC = () => {
         const { user: loadedUser, shelf: loadedShelf } = await loadUserData();
         
         if (loadedUser) {
-            // Ensure backwards compatibility
-            if (loadedUser.isAnonymous === undefined) loadedUser.isAnonymous = false;
-            if (!loadedUser.scanHistory) loadedUser.scanHistory = [loadedUser.biometrics];
-            
-            setUser(loadedUser);
-            setShelf(loadedShelf);
-            setView(AppView.DASHBOARD);
+            // Fix: Unregistered (anonymous) users start fresh on refresh to prevent stale data
+            if (loadedUser.isAnonymous) {
+                 console.log("Clearing anonymous session data.");
+                 clearLocalData();
+                 // Do not set user, remains null -> Onboarding
+            } else {
+                 // Ensure backwards compatibility
+                 if (loadedUser.isAnonymous === undefined) loadedUser.isAnonymous = false;
+                 if (!loadedUser.scanHistory) loadedUser.scanHistory = [loadedUser.biometrics];
+                 
+                 setUser(loadedUser);
+                 setShelf(loadedShelf);
+                 setView(AppView.DASHBOARD);
+            }
         }
         setIsLoading(false);
     };

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SkinType } from '../types';
-import { ChevronRight, Sparkles, Calendar, ArrowRight, HelpCircle, LogIn } from 'lucide-react';
+import { ChevronRight, Sparkles, Calendar, ArrowRight, HelpCircle, LogIn, ArrowLeft } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (data: { name: string; age: number; skinType: SkinType }) => void;
@@ -16,6 +16,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
   const handleNext = () => {
     if (step === 0 && name) setStep(1);
     else if (step === 1 && age) setStep(2);
+  };
+
+  const handleBack = () => {
+      if (step > 0) setStep(step - 1);
   };
 
   const handleFinalSelection = (selectedType: SkinType) => {
@@ -34,10 +38,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
     <div className="h-screen w-full relative bg-white overflow-hidden flex flex-col font-sans p-8">
       
       <div className="w-full flex justify-between items-center mb-12 pt-4">
-          <div className="flex gap-2">
-            {[0, 1, 2].map(i => (
-                <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-teal-600' : 'w-2 bg-zinc-100'}`} />
-            ))}
+          <div className="flex items-center gap-4">
+            {step > 0 && (
+                <button 
+                    onClick={handleBack}
+                    className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:text-zinc-900 transition-colors"
+                >
+                    <ArrowLeft size={16} />
+                </button>
+            )}
+            <div className="flex gap-2">
+                {[0, 1, 2].map(i => (
+                    <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-teal-600' : 'w-2 bg-zinc-100'}`} />
+                ))}
+            </div>
           </div>
           
           {step === 0 ? (

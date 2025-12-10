@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
@@ -139,40 +138,42 @@ export const analyzeFaceSkin = async (
     return runWithRetry(async (ai) => {
         
         // 2. CONSISTENCY PROTOCOL
-        // We instruct the AI to act as a deterministic grading algorithm.
+        // Round local metrics to nearest 10 to smooth out CV noise (e.g., lighting flicker)
+        const round10 = (n: number) => Math.round(n / 10) * 10;
         
         const metricString = localMetrics ? JSON.stringify({
-            acne: localMetrics.acneActive,
-            redness: localMetrics.redness,
-            wrinkles: localMetrics.wrinkleFine,
-            texture: localMetrics.texture,
-            hydration: localMetrics.hydration,
-            overall: localMetrics.overallScore
+            acne: round10(localMetrics.acneActive),
+            redness: round10(localMetrics.redness),
+            wrinkles: round10(localMetrics.wrinkleFine),
+            texture: round10(localMetrics.texture),
+            hydration: round10(localMetrics.hydration),
+            overall: round10(localMetrics.overallScore)
         }) : "Not Available";
 
         const promptContext = `
         You are a highly precise, deterministic dermatological grading algorithm.
         
         INPUT DATA:
-        - Image: High-Resolution Face Scan (Pre-processed for contrast/exposure normalization).
-        - CV Estimates: ${metricString}
+        - Image: High-Resolution Face Scan (Pre-processed).
+        - CV Estimates (Smoothed): ${metricString}
         
         TASK:
-        Analyze the structural skin condition.
+        Analyze the structural skin condition with EXTREME CONSISTENCY.
         
-        STRICT CONSISTENCY RULES:
-        1. IGNORE LIGHTING: The image has been normalized. Do not penalize for shadows or brightness. Look for structural features (bumps, indentations, vascularity).
-        2. BUCKET & REFINE: First classify each metric into a bucket, then score within that bucket.
-           - "PERFECT" (95-100): No visible issues.
-           - "EXCELLENT" (85-95): Micro-imperfections only visible upon zoom.
-           - "GOOD" (75-85): Visible but mild issues (e.g., small pimple, slight redness).
-           - "AVERAGE" (60-75): Noticeable issues (e.g., breakout cluster, obvious wrinkles).
-           - "POOR" (40-60): Significant concerns.
-           - "CRITICAL" (0-40): Severe condition.
-        3. ROUNDING: Return strictly INTEGER scores. Round to the nearest whole number.
-        4. PRIMARY TRUTH: Trust your vision. If CV says 99 but you see acne, score it as "GOOD" or "AVERAGE" (70-85), not 99.
+        STRICT SCORING RULES:
+        1. ACNE/BLEMISHES: 
+           - 90-100: Absolute perfection. Zero visible spots.
+           - 80-89: 1-2 tiny non-inflamed marks.
+           - 60-79: Visible acne. If you see ANY red inflamed bumps, score MUST be below 80.
+           - 40-59: Multiple active breakouts.
+           - 0-39: Severe acne.
+           DO NOT FLIP FLOP. If unsure between two tiers (e.g., 60 vs 80), check the CV estimate. If CV is < 70, trust the lower score.
+        2. ANCHORING: Use the provided CV metrics as a baseline anchor. Deviate only if visual evidence is overwhelming.
+           - If CV Acne is 40, do not score 90 unless the CV is obviously wrong (e.g. hair detection error).
+           - If CV Acne is 90, do not score 40 unless you see obvious breakouts missed by CV.
+        3. IGNORE LIGHTING: The image has been normalized. Do not penalize for shadows. Look for structural features.
         
-        OUTPUT FORMAT: JSON only.
+        OUTPUT FORMAT: JSON only. Round all scores to nearest integer.
         `;
 
         const response = await ai.models.generateContent({
