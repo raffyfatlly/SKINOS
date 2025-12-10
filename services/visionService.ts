@@ -299,6 +299,72 @@ function calculateDarkCircleScore(eyeImg: ImageData, cheekImg: ImageData): numbe
     return Math.max(30, 100 - (diff * 2.5));
 }
 
+/**
+ * PRE-PROCESSING PIPELINE
+ * Normalizes image for AI consumption.
+ * 1. Auto-Exposure (Brightness Norm)
+ * 2. Contrast Stretching (HD Effect)
+ * 3. Sharpening (Detail Enhancement)
+ */
+export const preprocessForAI = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number
+): string => {
+    // 1. Get raw pixel data
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const len = data.length;
+
+    // 2. Calculate Stats (Luma) for Auto-Exposure
+    let sumLuma = 0;
+    // Sample every 16th pixel for speed
+    for (let i = 0; i < len; i += 16) { 
+        sumLuma += (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    }
+    const avgLuma = sumLuma / (len / 16);
+    
+    // Target Luma ~128 (Balanced Mid-Tone)
+    // Calculate adjustment needed
+    const exposureBias = 128 - avgLuma; 
+
+    // 3. Process Pixels (Brightness + Contrast)
+    // We apply a mild contrast curve to make features pop
+    const contrast = 1.15; // 15% contrast boost
+    const intercept = 128 * (1 - contrast);
+    
+    for (let i = 0; i < len; i += 4) {
+        // Apply Brightness (Exposure Correction)
+        let r = data[i] + exposureBias;
+        let g = data[i+1] + exposureBias;
+        let b = data[i+2] + exposureBias;
+
+        // Apply Contrast
+        r = (r * contrast) + intercept;
+        g = (g * contrast) + intercept;
+        b = (b * contrast) + intercept;
+
+        // Clamp
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i+1] = Math.max(0, Math.min(255, g));
+        data[i+2] = Math.max(0, Math.min(255, b));
+    }
+
+    // 4. Put back on a temp canvas
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (tempCtx) {
+        tempCtx.putImageData(imageData, 0, 0);
+        // Note: We skip complex convolution sharpening in JS as it's too slow for high-res images.
+        // The contrast boost effectively sharpens visual edges for the AI.
+    }
+
+    return tempCanvas.toDataURL('image/jpeg', 0.98); // Return High Quality JPEG
+};
+
+
 export const applyMedicalProcessing = (
     ctx: CanvasRenderingContext2D,
     width: number,

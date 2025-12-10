@@ -138,8 +138,8 @@ export const analyzeFaceSkin = async (
 
     return runWithRetry(async (ai) => {
         
-        // 2. HYBRID VALIDATION PROMPT
-        // Use CV metrics as a "hint" but trust Gemini's vision more.
+        // 2. CONSISTENCY PROTOCOL
+        // We instruct the AI to act as a deterministic grading algorithm.
         
         const metricString = localMetrics ? JSON.stringify({
             acne: localMetrics.acneActive,
@@ -151,25 +151,28 @@ export const analyzeFaceSkin = async (
         }) : "Not Available";
 
         const promptContext = `
-        You are a Senior Dermatologist. Analyze this high-resolution photo.
+        You are a highly precise, deterministic dermatological grading algorithm.
         
-        REFERENCE CV ESTIMATES (Use these as a baseline only, do not blindly trust them):
-        ${metricString}
+        INPUT DATA:
+        - Image: High-Resolution Face Scan (Pre-processed for contrast/exposure normalization).
+        - CV Estimates: ${metricString}
         
-        YOUR TASK:
-        Perform a visual assessment of the skin.
+        TASK:
+        Analyze the structural skin condition.
         
-        RULES FOR ACCURACY & CONSISTENCY:
-        1. PRIMARY TRUTH: Trust your own visual analysis of the image. The CV estimates can be wrong (e.g., if CV says 99 but you see acne, score it low).
-        2. BE CRITICAL: If you see acne bumps, redness, or dark spots, penalize the scores accordingly. Do not hallucinate perfection.
-        3. CONSISTENCY: Return stable integer scores.
-        4. SCALE: 0 = Severe Issues, 100 = Flawless/Perfect.
-           - Acne 90+ means almost clear. 50 means moderate breakouts.
-           - Redness 90+ means even tone. 50 means visible inflammation.
-        5. OUTPUT: Return strictly INTEGER scores (no decimals).
+        STRICT CONSISTENCY RULES:
+        1. IGNORE LIGHTING: The image has been normalized. Do not penalize for shadows or brightness. Look for structural features (bumps, indentations, vascularity).
+        2. BUCKET & REFINE: First classify each metric into a bucket, then score within that bucket.
+           - "PERFECT" (95-100): No visible issues.
+           - "EXCELLENT" (85-95): Micro-imperfections only visible upon zoom.
+           - "GOOD" (75-85): Visible but mild issues (e.g., small pimple, slight redness).
+           - "AVERAGE" (60-75): Noticeable issues (e.g., breakout cluster, obvious wrinkles).
+           - "POOR" (40-60): Significant concerns.
+           - "CRITICAL" (0-40): Severe condition.
+        3. ROUNDING: Return strictly INTEGER scores. Round to the nearest whole number.
+        4. PRIMARY TRUTH: Trust your vision. If CV says 99 but you see acne, score it as "GOOD" or "AVERAGE" (70-85), not 99.
         
-        Generate specific observation notes for key areas.
-        Return JSON.
+        OUTPUT FORMAT: JSON only.
         `;
 
         const response = await ai.models.generateContent({

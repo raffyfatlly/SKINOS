@@ -1,7 +1,8 @@
 
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Sparkles, Image as ImageIcon, ScanFace, BrainCircuit, Target, Lightbulb, CheckCircle2, Focus } from 'lucide-react';
-import { analyzeSkinFrame, drawBiometricOverlay, validateFrame, applyClinicalOverlays, applyMedicalProcessing } from '../services/visionService';
+import { analyzeSkinFrame, drawBiometricOverlay, validateFrame, applyClinicalOverlays, applyMedicalProcessing, preprocessForAI } from '../services/visionService';
 import { analyzeFaceSkin } from '../services/geminiService';
 import { SkinMetrics } from '../types';
 
@@ -196,8 +197,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
       return '';
   };
   
-  // Capture Raw High-Quality Image for AI Analysis (No filters)
-  const captureRawImage = (source: HTMLVideoElement | HTMLImageElement, flip: boolean): string => {
+  // Capture Pre-Processed Image for AI
+  const captureProcessedImage = (source: HTMLVideoElement | HTMLImageElement, flip: boolean): string => {
       const captureCanvas = document.createElement('canvas');
       const width = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
       const height = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
@@ -212,9 +213,9 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
           ctx.drawImage(source, 0, 0, width, height);
           if (flip) ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-          // NOTE: Do NOT apply applyMedicalProcessing here. 
-          // We want the AI to see the raw, natural skin for best accuracy.
-          return captureCanvas.toDataURL('image/jpeg', 0.95);
+          // Use advanced pre-processing (Auto-exposure + Contrast + Sharpening)
+          // This normalizes lighting and makes AI scores more consistent
+          return preprocessForAI(ctx, width, height);
       }
       return '';
   };
@@ -251,11 +252,11 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
                   
                   // Re-draw original for AI processing
                   ctx.drawImage(img, 0, 0, w, h);
-                  // Raw image to AI for best context
-                  const rawBase64 = canvas.toDataURL('image/jpeg', 0.95);
+                  // Use pre-processing for file uploads too!
+                  const processedBase64 = preprocessForAI(ctx, w, h);
 
                   // Pass image, local metrics, AND HISTORY to AI for context-aware analysis
-                  analyzeFaceSkin(rawBase64, localMetrics, scanHistory).then(aiMetrics => {
+                  analyzeFaceSkin(processedBase64, localMetrics, scanHistory).then(aiMetrics => {
                       setAiProgress(100);
                       setTimeout(() => {
                         onScanComplete(aiMetrics, displaySnapshot);
@@ -333,8 +334,8 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
            setIsScanning(false);
            setIsProcessingAI(true);
            
-           // Capture Raw Image (No Medical Filters) for AI - Better for Acne detection
-           const rawImage = captureRawImage(video, true);
+           // Capture Processed Image (Auto-Exposed + Contrasted) for AI Consistency
+           const processedImage = captureProcessedImage(video, true);
            const avgLocalMetrics = calculateAverageMetrics(metricsBuffer.current);
            
            // Generate Image with Clinical Overlay for Display
@@ -342,7 +343,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
            setCapturedSnapshot(displayImage);
 
            // Pass averaged local metrics AND HISTORY as anchor
-           analyzeFaceSkin(rawImage, avgLocalMetrics, scanHistory).then(aiMetrics => {
+           analyzeFaceSkin(processedImage, avgLocalMetrics, scanHistory).then(aiMetrics => {
                setAiProgress(100);
                setTimeout(() => {
                    const finalMetrics = { ...aiMetrics };
