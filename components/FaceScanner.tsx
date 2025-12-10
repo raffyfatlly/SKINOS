@@ -308,13 +308,15 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory }
           if (check.facePos) lastFacePos.current = check.facePos;
       }
 
-      if (now - lastAnalysisTimeRef.current > 200) {
+      // Sample more frequently for better averaging (100ms instead of 200ms)
+      if (now - lastAnalysisTimeRef.current > 100) {
           const metrics = analyzeSkinFrame(ctx, canvas.width, canvas.height);
           cachedMetricsRef.current = metrics;
           lastAnalysisTimeRef.current = now;
           if (check.isGood) {
               metricsBuffer.current.push(metrics);
-              if (metricsBuffer.current.length > 20) metricsBuffer.current.shift();
+              // Increase buffer size to 30 for smoother average
+              if (metricsBuffer.current.length > 30) metricsBuffer.current.shift();
           }
       }
       

@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
@@ -146,26 +147,26 @@ export const analyzeFaceSkin = async (
             redness: localMetrics.redness,
             wrinkles: localMetrics.wrinkleFine,
             texture: localMetrics.texture,
-            hydration: localMetrics.hydration
+            hydration: localMetrics.hydration,
+            overall: localMetrics.overallScore
         }) : "Not Available";
 
         const promptContext = `
         You are a Senior Dermatologist. 
-        We have performed a Computer Vision analysis (using Sobel/Lab/Laplacian kernels) on this face.
+        We have performed a highly accurate Computer Vision analysis (averaged over 30 video frames) on this face.
         
         CV METRICS (0-100 Scale, 100=Perfect):
         ${metricString}
         
         YOUR TASK:
-        Validate and finalize these scores. The CV algorithms are mathematically consistent but can be fooled by hair or shadows.
+        Validate the CV data.
         
-        RULES:
-        1. BASELINE: Start with the CV Metrics provided above. 
-        2. VALIDATE: Look at the image. Do the numbers match reality?
-           - If CV says Acne=30 (Severe) but skin looks clear -> Correct it upwards.
-           - If CV says Acne=90 (Clear) but you see spots -> Correct it downwards.
-           - If CV seems roughly correct -> KEEP THE CV SCORE. Do not change it arbitrarily.
-        3. CONSISTENCY: Do not round numbers. Precision (e.g. 73) is better than rounding (e.g. 75).
+        RULES FOR CONSISTENCY:
+        1. PRIMARY TRUTH: The CV metrics provided are mathematically stable time-averages. You must PRIORITIZE them.
+        2. NO HALLUCINATION: Do not invent scores. If the image supports the CV data, OUTPUT THE CV DATA EXACTLY.
+        3. DEVIATION: Only change a score if there is a gross error (e.g. CV says Acne=20 (Severe) but face is visibly clear). 
+           If the CV score is reasonable, keep it. Do not "tweak" it by 1-2 points.
+        4. FORMAT: All scores must be INTEGERS. No decimals.
         
         Generate specific observation notes for key areas.
         Return JSON.
@@ -180,28 +181,28 @@ export const analyzeFaceSkin = async (
                 ]
             },
             config: {
-                temperature: 0.1,      // Low temp for stability
-                topK: 32,
+                temperature: 0,      // Zero temp for maximum determinism
+                topK: 1,             // Restrict variance
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        overallScore: { type: Type.NUMBER },
-                        acneActive: { type: Type.NUMBER },
-                        acneScars: { type: Type.NUMBER },
-                        poreSize: { type: Type.NUMBER },
-                        blackheads: { type: Type.NUMBER },
-                        wrinkleFine: { type: Type.NUMBER },
-                        wrinkleDeep: { type: Type.NUMBER },
-                        sagging: { type: Type.NUMBER },
-                        pigmentation: { type: Type.NUMBER },
-                        redness: { type: Type.NUMBER },
-                        texture: { type: Type.NUMBER },
-                        hydration: { type: Type.NUMBER },
-                        oiliness: { type: Type.NUMBER },
-                        darkCircles: { type: Type.NUMBER },
+                        overallScore: { type: Type.INTEGER },
+                        acneActive: { type: Type.INTEGER },
+                        acneScars: { type: Type.INTEGER },
+                        poreSize: { type: Type.INTEGER },
+                        blackheads: { type: Type.INTEGER },
+                        wrinkleFine: { type: Type.INTEGER },
+                        wrinkleDeep: { type: Type.INTEGER },
+                        sagging: { type: Type.INTEGER },
+                        pigmentation: { type: Type.INTEGER },
+                        redness: { type: Type.INTEGER },
+                        texture: { type: Type.INTEGER },
+                        hydration: { type: Type.INTEGER },
+                        oiliness: { type: Type.INTEGER },
+                        darkCircles: { type: Type.INTEGER },
                         analysisSummary: { type: Type.STRING },
-                        skinAge: { type: Type.NUMBER },
+                        skinAge: { type: Type.INTEGER },
                         observations: { 
                             type: Type.OBJECT, 
                             properties: {
@@ -217,10 +218,27 @@ export const analyzeFaceSkin = async (
         });
         
         const aiData = JSON.parse(response.text || "{}");
-        if (!aiData.overallScore) throw new Error("Invalid AI Response");
+        if (!aiData.overallScore && !localMetrics) throw new Error("Invalid AI Response");
 
+        // Force integer rounding on all numeric fields to ensure consistency
         const finalMetrics: SkinMetrics = {
-            ...aiData,
+            overallScore: Math.round(aiData.overallScore || localMetrics?.overallScore || 0),
+            acneActive: Math.round(aiData.acneActive || localMetrics?.acneActive || 0),
+            acneScars: Math.round(aiData.acneScars || localMetrics?.acneScars || 0),
+            poreSize: Math.round(aiData.poreSize || localMetrics?.poreSize || 0),
+            blackheads: Math.round(aiData.blackheads || localMetrics?.blackheads || 0),
+            wrinkleFine: Math.round(aiData.wrinkleFine || localMetrics?.wrinkleFine || 0),
+            wrinkleDeep: Math.round(aiData.wrinkleDeep || localMetrics?.wrinkleDeep || 0),
+            sagging: Math.round(aiData.sagging || localMetrics?.sagging || 0),
+            pigmentation: Math.round(aiData.pigmentation || localMetrics?.pigmentation || 0),
+            redness: Math.round(aiData.redness || localMetrics?.redness || 0),
+            texture: Math.round(aiData.texture || localMetrics?.texture || 0),
+            hydration: Math.round(aiData.hydration || localMetrics?.hydration || 0),
+            oiliness: Math.round(aiData.oiliness || localMetrics?.oiliness || 0),
+            darkCircles: Math.round(aiData.darkCircles || localMetrics?.darkCircles || 0),
+            skinAge: Math.round(aiData.skinAge || 25),
+            analysisSummary: aiData.analysisSummary || "Analysis Complete",
+            observations: aiData.observations || {},
             timestamp: Date.now()
         };
 

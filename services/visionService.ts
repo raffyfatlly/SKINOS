@@ -1,4 +1,5 @@
 
+
 import { SkinMetrics } from '../types';
 
 /**
@@ -56,7 +57,7 @@ export const validateFrame = (
 };
 
 const normalizeScore = (raw: number): number => {
-    return Math.floor(Math.max(10, Math.min(99, raw)));
+    return Math.round(Math.max(10, Math.min(99, raw)));
 };
 
 // --- ADVANCED CV KERNELS ---

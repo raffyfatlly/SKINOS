@@ -785,8 +785,8 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
                         </div>
                         <div>
                              <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Skin Type</span>
-                             <span className="text-sm font-bold text-white flex items-center gap-1.5 h-[28px]">
-                                <Fingerprint size={14} className="text-teal-400" />
+                             <span className="text-xl font-black text-white flex items-center gap-1.5">
+                                <Fingerprint size={18} className="text-teal-400" />
                                 {calculatedSkinType.split('+')[0].trim()}
                              </span>
                         </div>
