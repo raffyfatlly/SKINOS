@@ -996,7 +996,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                     
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {prescription.ingredients.map((ing, i) => (
-                            <div key={i} className="bg-white/95 backdrop-blur-md rounded-2xl p-4 text-center shadow-lg transition-transform hover:scale-105 duration-300 animate-in zoom-in slide-in-from-bottom-8 flex flex-col items-center justify-center relative overflow-hidden fill-mode-backwards" style={{ animationDelay: `${400 + (i * 100)}ms` }}>
+                            <div key={i} className="bg-white/95 backdrop-blur-md rounded-2xl p-4 text-center shadow-lg transition-transform hover:scale-105 duration-300 animate-in zoom-in slide-in-from-bottom-8 flex flex-col items-center justify-center relative overflow-hidden fill-mode-backwards" style={{ animationDelay: `${400 + (i * 300)}ms` }}>
                                 
                                 {ing.isSafetySwap && (
                                     <div className="absolute top-0 left-0 right-0 bg-amber-50 py-1 text-[8px] font-bold text-amber-600 uppercase tracking-widest">
@@ -1089,46 +1089,95 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
             </div>
 
             {/* CLINICAL MENU SECTION (Renamed to Treatment for You) */}
-            <div className="modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 bg-teal-50/20 border-teal-100/50 cursor-pointer hover:bg-teal-50/30 transition-all active:scale-[0.99] group" onClick={() => setIsTreatmentExpanded(!isTreatmentExpanded)}>
+            <div 
+                className={`modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 cursor-pointer transition-all duration-500 group border-zinc-100
+                ${isTreatmentExpanded ? 'bg-white shadow-xl scale-[1.01]' : 'bg-gradient-to-br from-white to-zinc-50 hover:bg-white hover:border-teal-200'}`}
+                onClick={() => setIsTreatmentExpanded(!isTreatmentExpanded)}
+            >
                  <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-xl font-black text-zinc-900 tracking-tight">Treatment for You</h3>
-                        <p className="text-xs font-bold text-teal-600 uppercase tracking-widest mt-1">Based on {groupAnalysis.priorityCategory.toLowerCase()}</p>
+                    <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors duration-500 ${isTreatmentExpanded ? 'bg-teal-600 text-white shadow-lg shadow-teal-200' : 'bg-teal-50 text-teal-600 group-hover:bg-teal-100'}`}>
+                             <Syringe size={22} strokeWidth={isTreatmentExpanded ? 2.5 : 2} />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-black text-zinc-900 tracking-tight leading-none mb-1">Clinical Treatments</h3>
+                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest group-hover:text-teal-600 transition-colors">Targeting {groupAnalysis.priorityCategory}</p>
+                        </div>
                     </div>
-                    <div className={`w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 transition-transform duration-300 ${isTreatmentExpanded ? 'rotate-180' : ''}`}>
-                         {isTreatmentExpanded ? <ChevronDown size={18} /> : <Syringe size={18} />}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${isTreatmentExpanded ? 'bg-zinc-100 rotate-180 text-zinc-900' : 'text-zinc-300 group-hover:translate-y-1'}`}>
+                         <ChevronDown size={20} />
                     </div>
                  </div>
 
                  {!isTreatmentExpanded && (
-                    <div className="mt-6 flex justify-center animate-in fade-in duration-300">
-                        <span className="text-[10px] font-bold text-teal-500 uppercase tracking-widest bg-white/60 px-4 py-2 rounded-full flex items-center gap-2 group-hover:bg-white transition-colors shadow-sm">
-                            View Clinical Options <ChevronDown size={12} className="animate-bounce" />
-                        </span>
+                    <div className="mt-5 pt-5 border-t border-zinc-100/50 opacity-80 group-hover:opacity-100 transition-opacity">
+                         <p className="text-xs text-zinc-500 font-medium leading-relaxed mb-4">
+                            Professional, non-invasive procedures recommended to accelerate your {groupAnalysis.priorityCategory.toLowerCase()} progress.
+                         </p>
+                         
+                         <div className="flex items-center justify-between">
+                             <div className="flex -space-x-2">
+                                 {clinicalSuggestions.map((s, i) => (
+                                     <div key={i} className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${s.type === 'LASER' ? 'bg-rose-50 text-rose-500' : s.type === 'FACIAL' ? 'bg-sky-50 text-sky-500' : 'bg-violet-50 text-violet-500'}`}>
+                                         {s.type === 'LASER' ? <Zap size={10} /> : s.type === 'FACIAL' ? <Sparkles size={10} /> : <Activity size={10} />}
+                                     </div>
+                                 ))}
+                             </div>
+                             <span className="text-[10px] font-bold text-teal-600 bg-white border border-teal-100 px-3 py-1.5 rounded-full group-hover:bg-teal-50 transition-colors flex items-center gap-1.5 shadow-sm">
+                                View Options <ArrowRight size={10} />
+                             </span>
+                        </div>
                     </div>
                  )}
 
                  {isTreatmentExpanded && (
-                     <div className="space-y-4 mt-8 animate-in slide-in-from-top-4 duration-500 cursor-default" onClick={(e) => e.stopPropagation()}>
-                        {clinicalSuggestions.map((treatment, idx) => (
-                            <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-zinc-100 flex items-start gap-4">
-                                <div className="w-10 h-10 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0 mt-1">
-                                    {treatment.type === 'TREATMENT' ? <Zap size={16} className="text-zinc-600" /> : 
-                                     treatment.type === 'FACIAL' ? <Sparkles size={16} className="text-zinc-600" /> :
-                                     <Activity size={16} className="text-zinc-600" />}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="font-bold text-sm text-zinc-900">{treatment.name}</h4>
+                     <div className="space-y-3 mt-8 animate-in slide-in-from-top-4 duration-500 cursor-default" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-4 bg-zinc-50 rounded-2xl mb-4 border border-zinc-100">
+                            <p className="text-xs text-zinc-500 leading-relaxed">
+                                <span className="font-bold text-zinc-900">AI Recommendation:</span> Based on your {groupAnalysis.priorityCategory.toLowerCase()} score of {Math.round(groupAnalysis.priorityScore)}, these professional treatments could accelerate results.
+                            </p>
+                        </div>
+
+                        {clinicalSuggestions.map((treatment, idx) => {
+                            const isLaser = treatment.type === 'LASER';
+                            const isFacial = treatment.type === 'FACIAL';
+                            const colorClass = isLaser ? 'text-rose-500 bg-rose-50 border-rose-100' : isFacial ? 'text-sky-500 bg-sky-50 border-sky-100' : 'text-violet-500 bg-violet-50 border-violet-100';
+
+                            return (
+                                <div key={idx} className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-zinc-100 flex flex-col sm:flex-row gap-5 transition-all hover:border-teal-200 hover:shadow-md group/card">
+                                    <div className="flex items-start justify-between sm:hidden">
+                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${colorClass}`}>
+                                            {isLaser ? <Zap size={18} /> : isFacial ? <Sparkles size={18} /> : <Activity size={18} />}
+                                        </div>
+                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${colorClass}`}>
+                                            {treatment.type}
+                                        </span>
                                     </div>
-                                    <p className="text-xs text-zinc-500 font-medium mb-2 leading-relaxed">{treatment.benefit}</p>
-                                    <div className="flex gap-3">
-                                        <span className="text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded">Downtime: {treatment.downtime}</span>
-                                        <span className="text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded">Type: {treatment.type}</span>
+
+                                    <div className={`hidden sm:flex w-12 h-12 rounded-2xl items-center justify-center shrink-0 border ${colorClass}`}>
+                                        {isLaser ? <Zap size={22} /> : isFacial ? <Sparkles size={22} /> : <Activity size={22} />}
+                                    </div>
+                                    
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-bold text-sm text-zinc-900 mb-1.5 group-hover/card:text-teal-700 transition-colors flex items-center gap-2">
+                                            {treatment.name}
+                                            <span className="sm:hidden text-[9px] font-medium text-zinc-400 border border-zinc-100 px-1.5 py-0.5 rounded-full">{treatment.downtime}</span>
+                                        </h4>
+                                        <p className="text-xs text-zinc-500 font-medium leading-relaxed">{treatment.benefit}</p>
+                                    </div>
+
+                                    <div className="hidden sm:flex flex-col items-end justify-center gap-2 min-w-[100px]">
+                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${colorClass}`}>
+                                            {treatment.type}
+                                        </span>
+                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
+                                            {treatment.downtime === 'None' ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> : <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>}
+                                            {treatment.downtime}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                      </div>
                  )}
             </div>
