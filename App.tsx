@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, AppView, Product, SkinMetrics, SkinType } from './types';
 import FaceScanner from './components/FaceScanner';
 import ProductScanner from './components/ProductScanner';
+import ProductSearch from './components/ProductSearch';
 import SmartShelf from './components/SmartShelf';
 import SkinAnalysisReport from './components/SkinAnalysisReport';
 import Onboarding from './components/Onboarding';
@@ -10,10 +11,10 @@ import GuideOverlay from './components/GuideOverlay';
 import SaveProfileModal from './components/SaveProfileModal';
 import ProfileSetup from './components/ProfileSetup';
 import AIAssistant from './components/AIAssistant';
-import { getBuyingDecision } from './services/geminiService';
+import { getBuyingDecision, findBetterAlternatives, SearchResult, analyzeProductFromSearch } from './services/geminiService';
 import { auth } from './services/firebase';
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
-import { LayoutGrid, ScanBarcode, User, Sparkles, HelpCircle, ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle as QuestionIcon, ThumbsUp, ArrowRightLeft, ThumbsDown, FlaskConical, ShoppingBag, X, Zap, WifiOff } from 'lucide-react';
+import { LayoutGrid, ScanBarcode, User, Sparkles, HelpCircle, ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle as QuestionIcon, ThumbsUp, ArrowRightLeft, ThumbsDown, FlaskConical, ShoppingBag, X, Zap, WifiOff, Camera, Search, Globe, ChevronRight, CheckCircle2, Droplet, Sun, Layers, Brush } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 
 // --- VISUAL HIGHLIGHT COMPONENT ---
@@ -54,6 +55,11 @@ const App: React.FC = () => {
   const [lastScannedProduct, setLastScannedProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Alternatives Search State
+  const [alternatives, setAlternatives] = useState<SearchResult[]>([]);
+  const [isSearchingAlternatives, setIsSearchingAlternatives] = useState(false);
+  const [isAnalyzingAlternative, setIsAnalyzingAlternative] = useState(false);
+
   // AI Chat State
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [aiTriggerQuery, setAiTriggerQuery] = useState<string | null>(null);
@@ -63,6 +69,9 @@ const App: React.FC = () => {
   const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
   const [saveModalMode, setSaveModalMode] = useState<'LOGIN' | 'SAVE'>('SAVE');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  
+  // Add Product Menu State
+  const [showAddProductMenu, setShowAddProductMenu] = useState(false);
 
   // --- INITIAL DATA LOAD & AUTH LISTENER ---
   useEffect(() => {
@@ -192,6 +201,7 @@ const App: React.FC = () => {
 
   const handleProductFound = (product: Product) => {
     setLastScannedProduct(product);
+    setAlternatives([]); // Reset alternatives
     setShowProductModal(true);
     setView(AppView.SMART_SHELF); 
   };
@@ -203,6 +213,7 @@ const App: React.FC = () => {
       saveUserData(user, newShelf); // Save to Storage Service
       setShowProductModal(false);
       setLastScannedProduct(null);
+      setAlternatives([]);
     }
   };
 
@@ -258,6 +269,51 @@ const App: React.FC = () => {
       }
   };
   
+  const openAddProductMenu = () => {
+      setShowAddProductMenu(true);
+  }
+
+  const handleFindAlternatives = async () => {
+      if (!lastScannedProduct || !user) return;
+      setIsSearchingAlternatives(true);
+      try {
+          const results = await findBetterAlternatives(lastScannedProduct.type, user);
+          setAlternatives(results);
+      } catch (e) {
+          console.error("Failed to find alternatives", e);
+      } finally {
+          setIsSearchingAlternatives(false);
+      }
+  }
+
+  const handleSelectAlternative = async (alt: SearchResult) => {
+      if (!user) return;
+      setIsAnalyzingAlternative(true);
+      try {
+          // Analyze the selected alternative as a new product
+          const newProduct = await analyzeProductFromSearch(alt.name, user.biometrics);
+          // Replace current view with the new product
+          setLastScannedProduct(newProduct);
+          setAlternatives([]); // Clear alternatives since we found one
+      } catch (e) {
+          console.error("Failed to analyze alternative", e);
+      } finally {
+          setIsAnalyzingAlternative(false);
+      }
+  }
+
+  const getProductIcon = (type: string) => {
+      switch(type) {
+          case 'CLEANSER': return <Droplet size={18} />;
+          case 'SPF': return <Sun size={18} />;
+          case 'SERUM': return <Zap size={18} />;
+          case 'MOISTURIZER': return <FlaskConical size={18} />;
+          case 'FOUNDATION': return <Brush size={18} />;
+          case 'PRIMER': return <Layers size={18} />;
+          default: return <Sparkles size={18} />;
+      }
+  }
+
   // Splash Screen
   if (isLoading) {
       return (
@@ -307,6 +363,15 @@ const App: React.FC = () => {
             onCancel={() => setView(AppView.DASHBOARD)} 
           />
         ) : null;
+        
+      case AppView.PRODUCT_SEARCH:
+        return user ? (
+          <ProductSearch 
+             userProfile={user}
+             onProductFound={handleProductFound}
+             onCancel={() => setView(AppView.DASHBOARD)}
+          />
+        ) : null;
 
       case AppView.SMART_SHELF:
         return user ? (
@@ -314,7 +379,7 @@ const App: React.FC = () => {
                  <SmartShelf 
                     products={shelf} 
                     onRemoveProduct={removeFromShelf} 
-                    onScanNew={() => setView(AppView.PRODUCT_SCANNER)}
+                    onScanNew={openAddProductMenu}
                     onUpdateProduct={handleUpdateProduct}
                     userProfile={user}
                 />
@@ -422,11 +487,39 @@ const App: React.FC = () => {
       
       const getColorClasses = (color: string) => {
           switch(color) {
-              case 'emerald': return { bg: 'bg-emerald-500', text: 'text-emerald-600', light: 'bg-emerald-50', border: 'border-emerald-100', icon: ShieldCheck };
-              case 'rose': return { bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-100', icon: AlertTriangle };
-              case 'amber': return { bg: 'bg-amber-500', text: 'text-amber-600', light: 'bg-amber-50', border: 'border-amber-100', icon: AlertOctagon };
-              case 'zinc': return { bg: 'bg-zinc-500', text: 'text-zinc-600', light: 'bg-zinc-100', border: 'border-zinc-200', icon: HelpCircle }; 
-              default: return { bg: 'bg-zinc-500', text: 'text-zinc-500', light: 'bg-zinc-50', border: 'border-zinc-200', icon: HelpCircle };
+              case 'emerald': return { 
+                  bg: 'bg-emerald-500', 
+                  text: 'text-emerald-700', 
+                  light: 'bg-emerald-50', 
+                  border: 'border-emerald-100', 
+                  gradient: 'from-emerald-500 to-emerald-600',
+                  icon: ShieldCheck 
+              };
+              case 'rose': return { 
+                  bg: 'bg-rose-500', 
+                  text: 'text-rose-700', 
+                  light: 'bg-rose-50', 
+                  border: 'border-rose-100', 
+                  gradient: 'from-rose-500 to-rose-600',
+                  icon: AlertTriangle 
+              };
+              case 'amber': return { 
+                  bg: 'bg-amber-500', 
+                  text: 'text-amber-700', 
+                  light: 'bg-amber-50', 
+                  border: 'border-amber-100', 
+                  gradient: 'from-amber-400 to-amber-500',
+                  icon: AlertOctagon 
+              };
+              case 'zinc': 
+              default: return { 
+                  bg: 'bg-zinc-500', 
+                  text: 'text-zinc-600', 
+                  light: 'bg-zinc-100', 
+                  border: 'border-zinc-200', 
+                  gradient: 'from-zinc-500 to-zinc-600',
+                  icon: HelpCircle 
+              }; 
           }
       }
       
@@ -439,172 +532,218 @@ const App: React.FC = () => {
       });
 
       const isLowScore = audit.adjustedScore < 50;
-      const isMediocre = audit.adjustedScore >= 50 && audit.adjustedScore < 70;
+      const isCaution = audit.warnings.length > 0 && !isLowScore;
+      const showFindBetter = audit.adjustedScore < 70;
 
       return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-zinc-900/40 backdrop-blur-md animate-in slide-in-from-bottom-full duration-500">
-            <div className="mt-auto bg-white rounded-t-[2.5rem] overflow-hidden flex flex-col max-h-[92vh] shadow-2xl">
-                <div className="flex justify-between items-center p-6 border-b border-zinc-50 bg-white sticky top-0 z-10">
-                    <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                        <ShoppingBag size={14} className="text-teal-500" /> Buying Assistant
-                    </h2>
-                    <button onClick={() => { setShowProductModal(false); setLastScannedProduct(null); }} className="w-10 h-10 rounded-full bg-zinc-50 flex items-center justify-center hover:bg-zinc-100 text-zinc-400">
-                        <X size={20} />
+        <div className="fixed inset-0 z-50 flex flex-col bg-zinc-900/60 backdrop-blur-md animate-in slide-in-from-bottom-full duration-500">
+            <div className="mt-auto bg-white rounded-t-[2.5rem] overflow-hidden flex flex-col max-h-[92vh] shadow-2xl relative">
+                
+                {/* 1. Header with Close */}
+                <div className="px-6 py-4 flex items-center justify-between border-b border-zinc-50 bg-white sticky top-0 z-20">
+                    <div className="flex items-center gap-2">
+                         <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-500">
+                             {getProductIcon(lastScannedProduct.type)}
+                         </div>
+                         <div>
+                             <h2 className="text-sm font-black text-zinc-900 leading-tight line-clamp-1 max-w-[200px]">{lastScannedProduct.name}</h2>
+                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{lastScannedProduct.brand}</p>
+                         </div>
+                    </div>
+                    <button onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }} className="w-9 h-9 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-zinc-100 transition-colors">
+                        <X size={18} />
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6 bg-white">
-                    {/* VERDICT CARD */}
-                    <div className="text-center space-y-4 mb-8">
-                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border ${theme.light} ${theme.border} ${theme.text}`}>
-                             {verdict.decision === 'BUY' || verdict.decision === 'SWAP' ? <ThumbsUp size={12} /> : verdict.decision === 'COMPARE' ? <ArrowRightLeft size={12} /> : <ThumbsDown size={12} />} 
-                             {verdict.title}
-                        </div>
-                        <div>
-                            <h1 className={`text-7xl font-black tracking-tighter mb-1 ${theme.text.replace('600', '500')}`}>{audit.adjustedScore}%</h1>
-                            <p className="text-zinc-500 font-medium text-sm">{verdict.description}</p>
-                        </div>
+                {/* 2. Scrollable Content */}
+                <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8 bg-white relative pb-32">
+                    
+                    {/* HERO SCORE CARD */}
+                    <div className={`rounded-[2rem] p-8 text-white bg-gradient-to-br ${theme.gradient} shadow-lg relative overflow-hidden group`}>
+                         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-colors duration-700"></div>
+                         
+                         <div className="relative z-10 flex flex-col items-center text-center">
+                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase tracking-widest mb-4 border border-white/20">
+                                 <theme.icon size={12} /> {verdict.title}
+                             </div>
+                             <h1 className="text-8xl font-black tracking-tighter mb-2 drop-shadow-sm">{audit.adjustedScore}%</h1>
+                             <p className="text-white/90 font-medium text-sm max-w-[260px] leading-relaxed">{verdict.description}</p>
+                         </div>
                     </div>
 
-                    {/* CONCISE REASONING CARD */}
-                    <div className="modern-card rounded-[1.5rem] p-5 bg-zinc-50/50">
-                        <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                            <Zap size={14} className="text-teal-500" /> Analysis
-                        </h3>
-                        
-                        <div className="space-y-3">
-                            {/* 1. SAFETY CHECK (Strict) */}
-                            {audit.warnings.length > 0 ? (
-                                <div className="flex items-start gap-3 p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                                    <AlertTriangle size={16} className="text-rose-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-xs font-bold text-rose-700 block mb-0.5">Safety Alert</span>
-                                        <p className="text-xs text-rose-600 leading-snug">{audit.warnings[0].reason}</p>
-                                    </div>
-                                </div>
-                            ) : isLowScore ? (
-                                <div className="flex items-start gap-3 p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                                    <AlertTriangle size={16} className="text-rose-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-xs font-bold text-rose-700 block mb-0.5">Low Compatibility</span>
-                                        <p className="text-xs text-rose-600 leading-snug">{audit.analysisReason}</p>
-                                    </div>
-                                </div>
-                            ) : isMediocre ? (
-                                <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                                    <AlertOctagon size={16} className="text-amber-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-xs font-bold text-amber-700 block mb-0.5">Average Fit</span>
-                                        <p className="text-xs text-amber-600 leading-snug">{audit.analysisReason}</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-start gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-                                    <ShieldCheck size={16} className="text-emerald-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-xs font-bold text-emerald-700 block mb-0.5">Biometric Match</span>
-                                        <p className="text-xs text-emerald-600 leading-snug">{audit.analysisReason}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 2. SHELF CONTEXT */}
-                            {shelfConflicts.length > 0 ? (
-                                <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                                    <AlertOctagon size={16} className="text-amber-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-xs font-bold text-amber-700 block mb-0.5">Routine Conflict</span>
-                                        <p className="text-xs text-amber-600 leading-snug">{shelfConflicts[0]}</p>
-                                    </div>
-                                </div>
-                            ) : existingSameType.length > 0 ? (
-                                <div className="flex items-start gap-3 p-3 bg-zinc-100 border border-zinc-200 rounded-xl">
-                                    <ArrowRightLeft size={16} className="text-zinc-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-xs font-bold text-zinc-700 block mb-0.5">Comparison</span>
-                                        <p className="text-xs text-zinc-600 leading-snug">
-                                            {comparison.result === 'BETTER' 
-                                                ? `Scores higher than your current ${existingSameType[0].name}.` 
-                                                : comparison.result === 'WORSE'
-                                                ? `Your current ${existingSameType[0].name} is a better match.`
-                                                : `Similar performance to your current ${existingSameType[0].name}.`}
-                                        </p>
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    {/* FORMULA BREAKDOWN LIST (Merged Risks & Benefits) */}
-                    <div>
-                        <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                             <FlaskConical size={12} /> Formula Breakdown
-                        </h3>
-                        <div className="space-y-3">
-                             {/* Show Warnings First */}
-                             {audit.warnings.map((risk, i) => (
-                                 <div key={`r-${i}`} className="flex items-start gap-3 p-3 rounded-2xl bg-rose-50 border border-rose-100">
-                                     <AlertTriangle size={16} className="text-rose-500 shrink-0 mt-0.5" />
-                                     <div>
-                                         <span className="text-xs font-bold text-rose-900 block mb-0.5">Safety Warning</span>
-                                         <p className="text-xs text-zinc-600 leading-snug">{risk.reason}</p>
-                                     </div>
-                                 </div>
-                             ))}
-
-                             {/* Show Top Ingredients & Impact */}
-                             {sortedBenefits.slice(0, 3).map((benefit, i) => {
-                                 const userScore = user.biometrics[benefit.target as keyof SkinMetrics] as number || 0;
-                                 const isRelevant = userScore < 70; 
-                                 const isMismatch = isLowScore;
-
-                                 if (isMismatch) return null;
-
-                                 return (
-                                     <div key={`b-${i}`} className="flex items-start gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-100">
-                                         <Zap size={16} className={isRelevant ? "text-teal-500 shrink-0 mt-0.5" : "text-zinc-400 shrink-0 mt-0.5"} />
-                                         <div>
-                                             <div className="flex items-center gap-2 mb-0.5">
-                                                 <span className="text-xs font-bold text-zinc-900">{benefit.ingredient}</span>
-                                                 {isRelevant && (
-                                                     <span className="text-[9px] font-bold bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded uppercase">Helpful</span>
-                                                 )}
-                                             </div>
-                                             <p className="text-xs text-zinc-600 leading-snug">
-                                                 {benefit.description}
-                                             </p>
-                                         </div>
-                                     </div>
-                                 )
-                             })}
+                    {/* FIND BETTER ALTERNATIVES (Contextual) */}
+                    {showFindBetter && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4">
+                             <button 
+                                onClick={handleFindAlternatives}
+                                disabled={isSearchingAlternatives || alternatives.length > 0}
+                                className="w-full py-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold text-xs uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-80"
+                             >
+                                 {isSearchingAlternatives ? (
+                                     <>
+                                        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                        Searching Top Picks...
+                                     </>
+                                 ) : alternatives.length > 0 ? (
+                                     <>
+                                        <Sparkles size={16} /> Alternatives Found below
+                                     </>
+                                 ) : (
+                                     <>
+                                        <Globe size={16} /> Find Better Match
+                                     </>
+                                 )}
+                             </button>
                              
-                             {/* Fallback if list is empty due to mismatch filter */}
-                             {sortedBenefits.length > 0 && isLowScore && audit.warnings.length === 0 && (
-                                 <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 text-center">
-                                     <p className="text-xs text-zinc-400 italic">Beneficial ingredients not shown due to low overall compatibility.</p>
+                             {(alternatives.length > 0 || isAnalyzingAlternative) && (
+                                 <div className="mt-4 space-y-3">
+                                     {isAnalyzingAlternative && (
+                                          <div className="p-4 rounded-2xl bg-zinc-50 flex items-center justify-center gap-3">
+                                              <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin"></div>
+                                              <span className="text-xs font-bold text-zinc-600">Analyzing Selection...</span>
+                                          </div>
+                                     )}
+                                     {alternatives.map((alt, i) => (
+                                         <button 
+                                            key={i}
+                                            onClick={() => handleSelectAlternative(alt)}
+                                            className="w-full text-left bg-white p-4 rounded-[1.5rem] border border-indigo-50 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group flex justify-between items-center"
+                                         >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold text-xs">
+                                                    #{i+1}
+                                                </div>
+                                                <div>
+                                                    <h5 className="font-bold text-sm text-zinc-900 leading-tight mb-0.5 group-hover:text-indigo-700 transition-colors">{alt.name}</h5>
+                                                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{alt.brand}</p>
+                                                </div>
+                                            </div>
+                                            <ChevronRight size={18} className="text-zinc-300 group-hover:text-indigo-500" />
+                                         </button>
+                                     ))}
                                  </div>
                              )}
                         </div>
+                    )}
+
+                    {/* ANALYSIS SECTION */}
+                    <div className="space-y-4">
+                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                             <CheckCircle2 size={14} className="text-teal-500" /> Clinical Verdict
+                        </h3>
+
+                        {/* 1. SAFETY/RISKS */}
+                        {audit.warnings.length > 0 && (
+                            <div className={`p-5 rounded-[1.5rem] border ${isCaution ? 'bg-amber-50 border-amber-100' : 'bg-rose-50 border-rose-100'}`}>
+                                <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${isCaution ? 'text-amber-700' : 'text-rose-700'}`}>
+                                    <AlertTriangle size={14} /> Safety Alert
+                                </h4>
+                                <ul className="space-y-2">
+                                    {audit.warnings.map((w, i) => (
+                                        <li key={i} className={`text-sm font-medium leading-relaxed ${isCaution ? 'text-amber-800' : 'text-rose-800'}`}>
+                                            • {w.reason}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {/* 2. BENEFITS */}
+                        <div className="p-5 bg-zinc-50 rounded-[1.5rem] border border-zinc-100">
+                             <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <FlaskConical size={14} /> Formula Intelligence
+                             </h4>
+                             <div className="space-y-3">
+                                {sortedBenefits.slice(0, 3).map((benefit, i) => {
+                                    const userScore = user.biometrics[benefit.target as keyof SkinMetrics] as number || 0;
+                                    const isRelevant = userScore < 70;
+                                    
+                                    if (isLowScore && !isRelevant) return null;
+
+                                    return (
+                                        <div key={i} className="flex gap-3 items-start bg-white p-3 rounded-2xl border border-zinc-100 shadow-sm">
+                                            <div className={`mt-0.5 ${isRelevant ? 'text-teal-500' : 'text-zinc-400'}`}>
+                                                <Zap size={16} />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className="text-xs font-bold text-zinc-900">{benefit.ingredient}</span>
+                                                    {isRelevant && <span className="text-[9px] font-bold bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded uppercase">Targeted</span>}
+                                                </div>
+                                                <p className="text-xs text-zinc-600 leading-snug">{benefit.description}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                                {sortedBenefits.length === 0 && (
+                                    <p className="text-xs text-zinc-400 font-medium italic">No key active ingredients detected for your specific needs.</p>
+                                )}
+                             </div>
+                        </div>
+
+                        {/* 3. SHELF CONTEXT */}
+                        {shelfConflicts.length > 0 && (
+                            <div className="p-5 bg-amber-50 border border-amber-100 rounded-[1.5rem]">
+                                <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <AlertOctagon size={14} /> Routine Conflict
+                                </h4>
+                                <p className="text-sm text-amber-800 font-medium leading-relaxed">
+                                    {shelfConflicts[0]}
+                                </p>
+                            </div>
+                        )}
+                        
+                        {existingSameType.length > 0 && shelfConflicts.length === 0 && (
+                            <div className="p-5 bg-zinc-100 rounded-[1.5rem] border border-zinc-200">
+                                <h4 className="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <ArrowRightLeft size={14} /> Comparison
+                                </h4>
+                                <p className="text-sm text-zinc-600 font-medium leading-relaxed">
+                                    {comparison.result === 'BETTER' 
+                                        ? `This scores higher than your current ${existingSameType[0].name}.` 
+                                        : comparison.result === 'WORSE'
+                                        ? `Your current ${existingSameType[0].name} is a better match.`
+                                        : `Similar performance to your current ${existingSameType[0].name}.`}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
+                    {/* INGREDIENTS */}
+                    <div className="pt-4">
+                        <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 pl-1">Full Ingredients</h3>
+                        <div className="flex flex-wrap gap-1.5">
+                            {lastScannedProduct.ingredients.length > 0 ? (
+                                lastScannedProduct.ingredients.map((ing, i) => (
+                                    <span key={i} className="px-2.5 py-1 bg-zinc-50 border border-zinc-100 text-zinc-500 text-[10px] font-bold rounded-lg uppercase tracking-wide">
+                                        {ing}
+                                    </span>
+                                ))
+                            ) : (
+                                <p className="text-xs text-zinc-400 italic">Ingredient list not available.</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
-
-                <div className="p-6 border-t border-zinc-100 bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.03)]">
+                
+                {/* 3. Footer Actions */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/95 backdrop-blur-xl border-t border-zinc-100 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-30">
                     <div className="grid grid-cols-2 gap-4">
                          <button 
-                            onClick={() => { setShowProductModal(false); setLastScannedProduct(null); }}
-                            className="py-4 rounded-2xl font-bold text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 transition-colors"
+                            onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }}
+                            className="py-4 rounded-[1.2rem] font-bold text-xs uppercase tracking-widest text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 transition-colors"
                          >
                             Discard
                          </button>
                          <button 
                             onClick={addToShelf}
-                            className="py-4 rounded-2xl bg-zinc-900 text-white font-bold shadow-xl shadow-zinc-900/10 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                            className="py-4 rounded-[1.2rem] bg-zinc-900 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-zinc-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                          >
-                            Add to Shelf
+                            <ShoppingBag size={16} /> Add to Shelf
                          </button>
                     </div>
                 </div>
+
             </div>
         </div>
       );
@@ -629,7 +768,7 @@ const App: React.FC = () => {
       )}
       
       {/* AI ASSISTANT (Accessible from anywhere) */}
-      {user && view !== AppView.ONBOARDING && view !== AppView.FACE_SCANNER && view !== AppView.PRODUCT_SCANNER && (
+      {user && view !== AppView.ONBOARDING && view !== AppView.FACE_SCANNER && view !== AppView.PRODUCT_SCANNER && view !== AppView.PRODUCT_SEARCH && (
          <AIAssistant 
             user={user} 
             shelf={shelf} 
@@ -640,8 +779,41 @@ const App: React.FC = () => {
          />
       )}
 
+      {/* Add Product Menu (Scan vs Search) */}
+      {showAddProductMenu && (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-sm animate-in fade-in" onClick={() => setShowAddProductMenu(false)}>
+              <div className="bg-white rounded-t-[2.5rem] p-8 animate-in slide-in-from-bottom-full duration-300" onClick={e => e.stopPropagation()}>
+                  <div className="w-12 h-1 bg-zinc-200 rounded-full mx-auto mb-8"></div>
+                  <h3 className="text-xl font-black text-zinc-900 tracking-tight mb-2 text-center">Product Match</h3>
+                  <p className="text-center text-zinc-500 text-sm font-medium mb-8">Analyze ingredients for compatibility.</p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                      <button 
+                          onClick={() => { setShowAddProductMenu(false); setView(AppView.PRODUCT_SCANNER); }}
+                          className="flex flex-col items-center justify-center gap-3 p-6 bg-zinc-50 border border-zinc-100 rounded-[2rem] hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-all group active:scale-[0.98]"
+                      >
+                          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-zinc-900 group-hover:bg-teal-500 group-hover:text-white transition-colors shadow-sm">
+                              <Camera size={24} />
+                          </div>
+                          <span className="text-sm font-bold">Scan Label</span>
+                      </button>
+
+                      <button 
+                          onClick={() => { setShowAddProductMenu(false); setView(AppView.PRODUCT_SEARCH); }}
+                          className="flex flex-col items-center justify-center gap-3 p-6 bg-zinc-50 border border-zinc-100 rounded-[2rem] hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 transition-all group active:scale-[0.98]"
+                      >
+                          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-zinc-900 group-hover:bg-indigo-500 group-hover:text-white transition-colors shadow-sm">
+                              <Globe size={24} />
+                          </div>
+                          <span className="text-sm font-bold">Search Online</span>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* FLOATING DOCK NAVIGATION */}
-      {view !== AppView.ONBOARDING && view !== AppView.FACE_SCANNER && view !== AppView.PRODUCT_SCANNER && view !== AppView.PROFILE_SETUP && (
+      {view !== AppView.ONBOARDING && view !== AppView.FACE_SCANNER && view !== AppView.PRODUCT_SCANNER && view !== AppView.PRODUCT_SEARCH && view !== AppView.PROFILE_SETUP && (
         <div className="fixed bottom-8 left-0 right-0 z-40 flex justify-center pointer-events-none">
             <nav className="floating-nav pointer-events-auto rounded-[2rem] h-20 px-6 flex gap-8 items-center shadow-2xl">
                 <NavButton 
@@ -652,7 +824,7 @@ const App: React.FC = () => {
                 />
 
                 <button 
-                    onClick={() => setView(AppView.PRODUCT_SCANNER)}
+                    onClick={openAddProductMenu}
                     className={`w-16 h-16 bg-teal-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-xl shadow-teal-600/40 transform transition-all duration-300 hover:scale-110 active:scale-95 border-4 border-white relative ${guideStep === 'SCAN' ? 'ring-4 ring-teal-400/50' : ''}`}
                 >
                     {guideStep === 'SCAN' && <PulseRing color="teal" />}

@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo } from 'react';
 import { Product, UserProfile, SkinMetrics } from '../types';
 import { Plus, Droplet, Sun, Zap, Sparkles, AlertTriangle, Layers, AlertOctagon, Target, ShieldCheck, X, FlaskConical, Clock, Ban, ArrowRightLeft, CheckCircle2, Microscope, Dna, Palette, Brush, SprayCan, Stamp, DollarSign, TrendingUp, TrendingDown, Wallet, ArrowUpRight, Edit2, Save, Info, ArrowUpCircle } from 'lucide-react';
@@ -421,8 +419,10 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                const audit = auditProduct(p, userProfile);
                const warning = audit.warnings.length > 0;
                const score = Number(audit.adjustedScore);
-               const isLowScore = !warning && (score < 70 || isNaN(score));
-               const isRisky = shelfIQ.analysis.riskyProducts.some(r => r.name === p.name);
+               // New logic: Only consider it "Low Score" if below 50. 50-70 is passable.
+               const isLowScore = score < 50; 
+               const isCaution = warning && score >= 50; // Good score but has warnings
+               
                const isConflict = shelfIQ.analysis.conflicts.some(c => c.toLowerCase().includes(p.ingredients[0]?.toLowerCase()) || p.ingredients.some(i => c.toLowerCase().includes(i.toLowerCase())));
 
                return (
@@ -431,7 +431,7 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                         onClick={() => setSelectedProduct(p)}
                         className="modern-card rounded-[2rem] p-5 text-left relative group flex flex-col items-start min-h-[180px] hover:border-teal-100 transition-colors"
                    >
-                        <div className={`absolute top-5 right-5 w-2 h-2 rounded-full ${warning ? 'bg-rose-500' : isLowScore ? 'bg-amber-500' : 'bg-emerald-400'}`} />
+                        <div className={`absolute top-5 right-5 w-2 h-2 rounded-full ${isCaution ? 'bg-amber-500' : warning ? 'bg-rose-500' : isLowScore ? 'bg-rose-400' : 'bg-emerald-400'}`} />
 
                         <div className={`w-14 h-14 rounded-2xl ${getProductColor(p.type)} flex items-center justify-center mb-5`}>
                             {getProductIcon(p.type)}
@@ -446,15 +446,23 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                         </div>
 
                         <div className={`inline-flex items-center px-2.5 py-1.5 rounded-lg text-[10px] font-bold tracking-wide ${
+                            isCaution ? 'bg-amber-50 text-amber-700' :
                             warning ? 'bg-rose-50 text-rose-700' : 
-                            isLowScore ? 'bg-amber-50 text-amber-700' :
+                            isLowScore ? 'bg-rose-50 text-rose-700' :
                             'bg-emerald-50 text-emerald-700'
                         }`}>
                             {warning ? (
-                                <>
-                                    <AlertTriangle size={12} className="mr-1.5" />
-                                    AVOID
-                                </>
+                                isCaution ? (
+                                    <>
+                                        <AlertTriangle size={12} className="mr-1.5" />
+                                        CAUTION
+                                    </>
+                                ) : (
+                                    <>
+                                        <AlertTriangle size={12} className="mr-1.5" />
+                                        AVOID
+                                    </>
+                                )
                             ) : isConflict ? (
                                 <>
                                     <Clock size={12} className="mr-1.5" />
@@ -472,7 +480,7 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                <div className="w-12 h-12 rounded-full bg-zinc-50 flex items-center justify-center group-hover:bg-white group-hover:shadow-sm transition-all">
                    <Plus size={24} />
                </div>
-               <span className="text-[10px] font-bold uppercase tracking-widest">Add Product</span>
+               <span className="text-[10px] font-bold uppercase tracking-widest">Check New Match</span>
            </button>
        </div>
        
@@ -530,21 +538,26 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                              const audit = auditProduct(selectedProduct, userProfile);
                              const warning = audit.warnings.length > 0;
                              const score = Number(audit.adjustedScore);
-                             const isLowScore = !warning && (score < 70 || isNaN(score));
+                             const isLowScore = score < 50;
+                             const isCaution = warning && score >= 50;
                              
-                             const cardStyle = warning ? 'bg-rose-50 border-rose-100' : 
-                                               isLowScore ? 'bg-amber-50 border-amber-100' : 
+                             const cardStyle = isCaution ? 'bg-amber-50 border-amber-100' :
+                                               warning ? 'bg-rose-50 border-rose-100' : 
+                                               isLowScore ? 'bg-zinc-50 border-zinc-200' : 
                                                'bg-emerald-50 border-emerald-100';
 
-                             const textStyle = warning ? 'text-rose-700' : 
-                                               isLowScore ? 'text-amber-700' :
+                             const textStyle = isCaution ? 'text-amber-700' :
+                                               warning ? 'text-rose-700' : 
+                                               isLowScore ? 'text-zinc-600' :
                                                'text-emerald-700';
 
-                             const scoreStyle = warning ? 'text-rose-600' : 
-                                                isLowScore ? 'text-amber-600' :
+                             const scoreStyle = isCaution ? 'text-amber-600' :
+                                                warning ? 'text-rose-600' : 
+                                                isLowScore ? 'text-zinc-500' :
                                                 'text-emerald-600';
 
-                             const label = warning ? 'Biometric Mismatch' : 
+                             const label = isCaution ? 'Caution advised' :
+                                           warning ? 'Biometric Mismatch' : 
                                            isLowScore ? 'Low Compatibility' : 
                                            'Excellent Fit';
 
@@ -557,9 +570,9 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                          <span className={`text-3xl font-black ${scoreStyle}`}>{score}%</span>
                                      </div>
                                      {warning ? (
-                                         <p className="text-sm text-rose-800 font-medium leading-relaxed">{audit.warnings[0].reason}</p>
+                                         <p className={`text-sm font-medium leading-relaxed ${textStyle}`}>{audit.warnings[0].reason}</p>
                                      ) : isLowScore ? (
-                                          <p className="text-sm text-amber-800 font-medium leading-relaxed">{audit.analysisReason}</p>
+                                          <p className="text-sm text-zinc-600 font-medium leading-relaxed">{audit.analysisReason}</p>
                                      ) : (
                                          <p className="text-sm text-emerald-800 font-medium leading-relaxed">Formulation aligns with your current skin metrics.</p>
                                      )}
@@ -649,7 +662,7 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                                      <div className="flex justify-between items-start mb-1">
                                                          <span className="text-xs font-bold text-rose-950">Safety Alert</span>
                                                          <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wide bg-rose-100 text-rose-600">
-                                                             Avoid
+                                                             Check
                                                          </span>
                                                      </div>
                                                      <p className="text-[11px] text-zinc-600 font-medium leading-snug">
@@ -663,9 +676,9 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                         {getSortedBenefits(selectedProduct).slice(0, 3).map((b, i) => {
                                              const userScore = userProfile.biometrics[b.target as keyof SkinMetrics] as number || 0;
                                              const isCritical = userScore < 50;
-                                             const isMismatch = audit.adjustedScore < 60;
+                                             // Even if mismatch, show benefits if score > 30 to show "some" good
+                                             const isMismatch = audit.adjustedScore < 30;
                                              
-                                             // Only show positive benefits if not a total mismatch
                                              if (isMismatch) return null;
 
                                              return (
@@ -685,7 +698,7 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                                                  {isCritical ? 'Priority Fix' : 'Effective'}
                                                              </span>
                                                          </div>
-                                                         <p className="text-[11px] text-zinc-600 font-medium leading-snug">
+                                                         <p className="text-xs text-zinc-600 font-medium leading-snug">
                                                              {b.description}
                                                          </p>
                                                      </div>

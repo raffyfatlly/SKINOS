@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, Check, X, AlertOctagon, ScanLine, Image as ImageIcon, Upload } from 'lucide-react';
 import { analyzeProductImage } from '../services/geminiService';
@@ -15,9 +16,31 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadingText, setLoadingText] = useState("Analyzing Product...");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [useCamera, setUseCamera] = useState(true);
+
+  // Cycle loading text to keep user engaged during deep search
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isProcessing) {
+        const messages = [
+            "Analyzing Label...",
+            "Checking Databases...",
+            "Searching Watsons MY...",
+            "Verifying Ingredients...",
+            "Calculating Match..."
+        ];
+        let i = 0;
+        setLoadingText(messages[0]);
+        interval = setInterval(() => {
+            i = (i + 1) % messages.length;
+            setLoadingText(messages[i]);
+        }, 3000); // Change every 3 seconds
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing]);
 
   useEffect(() => {
     let currentStream: MediaStream | null = null;
@@ -161,8 +184,8 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-20 animate-in fade-in">
             <div className="text-center p-6">
                <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-               <h3 className="text-2xl font-bold text-white mb-2">Analyzing Product...</h3>
-               <p className="text-emerald-400 text-sm font-medium tracking-wide">Reading ingredients & calculating safety...</p>
+               <h3 className="text-2xl font-bold text-white mb-2">{loadingText}</h3>
+               <p className="text-emerald-400 text-sm font-medium tracking-wide">This may take up to 30 seconds...</p>
             </div>
           </div>
         )}

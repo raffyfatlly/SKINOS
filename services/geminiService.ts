@@ -1,6 +1,4 @@
 
-
-
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
@@ -74,15 +72,26 @@ export const isQuotaError = (error: any): boolean => {
 };
 
 /**
- * Wrapper for AI calls.
+ * Wrapper for AI calls with Retry and Timeout support.
  */
 async function runWithRetry<T>(
     operation: (ai: GoogleGenAI) => Promise<T>, 
-    fallbackValue?: T
+    fallbackValue?: T,
+    timeoutMs: number = 60000 // Increased default to 60s for deep research
 ): Promise<T> {
     try {
         const ai = getAI();
-        return await operation(ai);
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+        );
+
+        // Race the operation against the timeout
+        return await Promise.race([
+            operation(ai),
+            timeoutPromise
+        ]);
     } catch (error) {
         console.error("AI Operation Failed:", error);
         if (fallbackValue) return fallbackValue;
@@ -142,6 +151,35 @@ const stabilizeScore = (newScore: number, prevScore: number, stabilityFactor: nu
     
     return Math.round((prevScore * damping) + (newScore * (1 - damping)));
 };
+
+// --- HELPER FOR PARSING JSON FROM TEXT ---
+const parseJSONFromText = (text: string) => {
+    if (!text) return null;
+    try {
+        // Try direct parse first
+        return JSON.parse(text);
+    } catch (e) {
+        // Look for markdown code blocks
+        const match = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
+        if (match) {
+            try {
+                return JSON.parse(match[1]);
+            } catch (e2) {
+                console.error("Failed to parse JSON block", e2);
+            }
+        }
+        // Last ditch: try to find array/object boundaries
+        const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (arrayMatch) {
+             try { return JSON.parse(arrayMatch[0]); } catch (e3) {}
+        }
+        const objMatch = text.match(/\{\s*\"[\s\S]*\}\s*/);
+        if (objMatch) {
+             try { return JSON.parse(objMatch[0]); } catch (e3) {}
+        }
+        return null;
+    }
+}
 
 // --- AI FUNCTIONS ---
 
@@ -220,7 +258,7 @@ export const analyzeFaceSkin = async (
         - 0-49: Severe issues.
         
         OUTPUT FORMAT: JSON.
-        Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, skinAge, stabilityRating (0-100), analysisSummary (string).
+        Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string).
         
         INSTRUCTION FOR SUMMARY:
         Provide a professional clinical assessment (3-4 sentences). **Bold** the specific diagnosis, root cause, or most critical concern using asterisks like **this**. Do not summarize the scores, explain the *why*. Example: "Overall skin health is stable, but **congestion in the T-zone** indicates improper cleansing. Hydration levels are adequate, though **mild erythema on the cheeks** suggests sensitivity."
@@ -326,29 +364,40 @@ export const analyzeFaceSkin = async (
 
 export const analyzeProductImage = async (imageBase64: string, userMetrics?: SkinMetrics): Promise<Product> => {
     return runWithRetry(async (ai) => {
-        let promptText = "Extract product name, brand, type (CLEANSER, TONER, SERUM, MOISTURIZER, SPF, TREATMENT, FOUNDATION, CONCEALER, POWDER, PRIMER, SETTING_SPRAY, BLUSH, BRONZER), ingredients, and Estimated Retail Price in MYR (Malaysian Ringgit). Analyze suitability (0-100). Return JSON.";
+        let promptText = "Extract product name, brand, type, ingredients, and Estimated Retail Price in MYR. Analyze suitability. Return JSON.";
         
         if (userMetrics) {
             promptText = `
             Analyze this product image for a user with the following skin profile:
-            - Hydration: ${userMetrics.hydration} (0-40 is DRY, 40-60 is NORMAL, 60+ is HYDRATED)
-            - Oiliness: ${userMetrics.oiliness} (0-40 is OILY, 40-60 is NORMAL, 60+ is DRY)
-            - Acne Score: ${userMetrics.acneActive} (Lower is worse)
+            - Hydration: ${userMetrics.hydration}
+            - Oiliness: ${userMetrics.oiliness}
+            - Acne Score: ${userMetrics.acneActive}
             - Sensitivity/Redness: ${userMetrics.redness} (Lower is sensitive)
             
-            STRICT SCORING RUBRIC (Consistency is Key):
-            1. TYPE CLASSIFICATION: Infer the type (CLEANSER, ETC) based on keywords. "Face Wash" = CLEANSER. "Lotion" = MOISTURIZER. "Sunblock" = SPF.
-            2. DRY SKIN CONTRADICTION: If User Hydration < 45 AND product is "Matte", "Oil-Free", "Clay", "Foaming", or contains Alcohol Denat/Salicylic Acid -> Suitability Score MUST be < 50. Even if it helps acne, it is BAD for dry skin.
-            3. SENSITIVE SKIN CONTRADICTION: If User Redness < 50 AND product contains Fragrance, Essential Oils, or High % Acids -> Suitability Score MUST be < 55.
-            4. PERFECT MATCH: High score (>85) requires the product to specifically target the user's Weakest Metric without harming others.
-            
             TASKS:
-            1. Extract Name, Brand, Type.
-            2. Estimate "estimatedPrice" in MYR (Malaysian Ringgit) based on retailers like Watsons, Sephora Malaysia, or Guardian.
-            3. Calculate 'suitabilityScore' (0-100) using the RUBRIC above.
-            4. List Risks and Benefits for THIS user.
+            1. IDENTIFY: Scan the image to identify the Brand and Product Name.
+            2. INGREDIENTS: Attempt to read the ingredient list from the label.
+               CRITICAL: If the ingredient list is blurry, small, or hidden, YOU MUST USE GOOGLE SEARCH to find the official "Full Ingredients List (INCI)" for this exact product name. Do not guess.
+               Search Sources: Watsons Malaysia, Guardian MY, Sephora MY, INCIDecoder, Skincarisma.
+            3. PRICE: Search for the current price in MYR (Malaysian Ringgit).
+            4. SCORING STRATEGY:
+               - Start with 100.
+               - Check for 'Star Actives' that match user needs (e.g. Salicylic for Acne).
+               - Check for Risks (Alcohol/Fragrance for Sensitive skin).
+               - Deduct 10-15 points per risk. Do NOT hard clamp the score.
+               - A product with risks should naturally fall to 60-75 range, not 0.
             
-            Return JSON.
+            Return STRICT JSON:
+            {
+                "name": "Exact Product Name",
+                "brand": "Brand",
+                "type": "CLEANSER" | "TONER" | "SERUM" | "MOISTURIZER" | "SPF" | "TREATMENT" | "FOUNDATION" | "OTHER",
+                "ingredients": ["Water", "Glycerin", ...], 
+                "estimatedPrice": Number,
+                "suitabilityScore": Number (0-100),
+                "risks": [{ "ingredient": "Name", "riskLevel": "HIGH", "reason": "Why" }],
+                "benefits": [{ "ingredient": "Name", "target": "Metric", "description": "Why" }]
+            }
             `;
         }
 
@@ -361,53 +410,155 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
                 ]
             },
             config: {
-                temperature: 0,
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        id: { type: Type.STRING },
-                        name: { type: Type.STRING },
-                        brand: { type: Type.STRING },
-                        ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        risks: { 
-                            type: Type.ARRAY, 
-                            items: { 
-                                type: Type.OBJECT, 
-                                properties: { 
-                                    ingredient: { type: Type.STRING }, 
-                                    riskLevel: { type: Type.STRING }, 
-                                    reason: { type: Type.STRING } 
-                                } 
-                            } 
-                        },
-                        benefits: { 
-                            type: Type.ARRAY, 
-                            items: { 
-                                type: Type.OBJECT, 
-                                properties: { 
-                                    ingredient: { type: Type.STRING }, 
-                                    target: { type: Type.STRING }, 
-                                    description: { type: Type.STRING }, 
-                                    relevance: { type: Type.STRING } 
-                                } 
-                            } 
-                        },
-                        suitabilityScore: { type: Type.NUMBER },
-                        estimatedPrice: { type: Type.NUMBER },
-                        type: { type: Type.STRING }
-                    }
-                }
+                tools: [{ googleSearch: {} }], // ENABLE HYBRID VISION + SEARCH
+                responseMimeType: "application/json"
             }
         });
 
-        const data = JSON.parse(response.text || "{}");
+        const text = response.text || "{}";
+        const data = parseJSONFromText(text);
+
+        if (!data || !data.name) {
+             console.warn("Gemini returned invalid JSON for product:", text);
+             throw new Error("Failed to analyze product.");
+        }
+
         return {
             ...data,
             id: Date.now().toString(),
             dateScanned: Date.now()
         };
-    }, getFallbackProduct(userMetrics));
+    }, getFallbackProduct(userMetrics), 60000); // 60s timeout for deep search
+};
+
+// --- SEARCH & ONLINE ANALYSIS (New Features) ---
+
+export interface SearchResult {
+    name: string;
+    brand: string;
+    url?: string;
+    rating?: number;
+}
+
+export const searchProducts = async (query: string): Promise<SearchResult[]> => {
+    return runWithRetry(async (ai) => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Find skincare products matching "${query}" available at Watsons Malaysia, Guardian MY, or Sephora Malaysia. 
+            Return a STRICT JSON array of up to 5 products.
+            Format: [{ "name": "Exact Name", "brand": "Brand", "rating": 4.5 }]`,
+            config: {
+                tools: [{ googleSearch: {} }]
+            }
+        });
+
+        const text = response.text || "[]";
+        let results = [];
+        try { results = parseJSONFromText(text) || []; } catch(e) { }
+        
+        if (Array.isArray(results)) {
+            return results.map((r: any) => ({
+                name: r.name || "Unknown Product",
+                brand: r.brand || "Unknown Brand",
+                rating: r.rating || 4.5
+            }));
+        }
+        return [];
+    }, [], 30000); // 30s timeout
+};
+
+export const findBetterAlternatives = async (originalProductType: string, user: UserProfile): Promise<SearchResult[]> => {
+    return runWithRetry(async (ai) => {
+        const metrics = user.biometrics;
+        // Construct a specific query based on user skin needs
+        let skinType = "Normal";
+        if (metrics.oiliness < 40) skinType = "Oily";
+        else if (metrics.hydration < 40) skinType = "Dry";
+        else if (metrics.redness < 50) skinType = "Sensitive";
+
+        let concern = "";
+        if (metrics.acneActive < 60) concern = "acne";
+        else if (metrics.pigmentation < 60) concern = "dark spots";
+        else if (metrics.wrinkleFine < 60) concern = "anti-aging";
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Search for 3 highly-rated ${originalProductType} products suitable for ${skinType} skin ${concern ? `targeting ${concern}` : ''} available at Watsons Malaysia, Guardian, or Sephora.
+            Return STRICT JSON array: [{ "name": "Product Name", "brand": "Brand", "rating": 4.8 }]`,
+            config: {
+                tools: [{ googleSearch: {} }]
+            }
+        });
+
+        const text = response.text || "[]";
+        let results = [];
+        try { results = parseJSONFromText(text) || []; } catch(e) {}
+        
+        if (Array.isArray(results)) return results;
+        return [];
+    }, [], 45000); // 45s timeout
+}
+
+export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics): Promise<Product> => {
+    return runWithRetry(async (ai) => {
+        const prompt = `
+        Product Name: "${productName}"
+        User Metrics:
+        - Hydration: ${userMetrics.hydration}
+        - Sensitivity: ${userMetrics.redness} (Lower is sensitive)
+        - Acne: ${userMetrics.acneActive}
+        
+        TASK:
+        1. SEARCH: Use Google Search to find the FULL INGREDIENTS LIST (INCI) for "${productName}". 
+           - Sources: Watsons Malaysia, Guardian, INCIDecoder, Skincarisma, Official Site.
+           - Find current price in MYR.
+           - IMPORTANT: You MUST extract the actual list of ingredients.
+        
+        2. ANALYZE:
+           - Check for allergens if Sensitivity < 60.
+           - Check for pore-cloggers if Acne < 60.
+           - Scoring: Start at 100. Deduct 10-15 pts per risk. Do NOT clamp score to 0. A risk implies Caution (60-75%), not Avoid (<40%) unless toxic.
+           - Bonus: Add points for matching actives.
+
+        3. OUTPUT: Strict JSON format.
+        {
+            "name": "${productName}",
+            "brand": "Brand",
+            "type": "CLEANSER" | "TONER" | "SERUM" | "MOISTURIZER" | "SPF" | "TREATMENT" | "FOUNDATION" | "OTHER",
+            "ingredients": ["Water", "Glycerin", ...], 
+            "estimatedPrice": Number,
+            "suitabilityScore": Number,
+            "risks": [{ "ingredient": "Name", "riskLevel": "HIGH", "reason": "Why" }],
+            "benefits": [{ "ingredient": "Name", "target": "Target", "description": "Why", "relevance": "HIGH" }]
+        }
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }]
+            }
+        });
+
+        const text = response.text || "{}";
+        const data = parseJSONFromText(text);
+
+        if (!data || !data.name) throw new Error("Analysis failed");
+
+        return {
+            id: Date.now().toString(),
+            name: data.name,
+            brand: data.brand || "Unknown",
+            type: data.type || "UNKNOWN",
+            ingredients: data.ingredients || [],
+            estimatedPrice: data.estimatedPrice || 0,
+            suitabilityScore: data.suitabilityScore || 50,
+            risks: data.risks || [],
+            benefits: data.benefits || [],
+            dateScanned: Date.now()
+        };
+    }, undefined, 60000); // 60s timeout
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
@@ -434,25 +585,63 @@ export const createDermatologistSession = (user: UserProfile, shelf: Product[]):
 export const auditProduct = (product: Product, user: UserProfile) => {
     const metrics = user.biometrics;
     let score = product.suitabilityScore;
-    const warnings: { reason: string }[] = [];
     
-    // Safety Checks
-    if (metrics.redness < 60 && (product.ingredients.includes('Fragrance') || product.ingredients.includes('Alcohol Denat'))) {
-        score = Math.min(score, 45);
-        warnings.push({ reason: "Contains potential irritants (Fragrance/Alcohol) for sensitive skin." });
+    // 1. Start with risks identified by AI
+    const warnings: { reason: string }[] = product.risks ? product.risks.map(r => ({ 
+        reason: `${r.ingredient}: ${r.reason}` 
+    })) : [];
+    
+    // 2. Local Safety Checks (Fallback/Double Check)
+    if (product.ingredients && product.ingredients.length > 0) {
+        // Sensitivity Check
+        const hasFragrance = product.ingredients.some(i => i.toLowerCase().includes('fragrance') || i.toLowerCase().includes('parfum'));
+        const hasAlcohol = product.ingredients.some(i => i.toLowerCase().includes('alcohol denat') || i.toLowerCase().includes('ethanol'));
+        
+        if (metrics.redness < 60 && (hasFragrance || hasAlcohol)) {
+            if (!warnings.some(w => w.reason.toLowerCase().includes('fragrance') || w.reason.toLowerCase().includes('alcohol'))) {
+                 warnings.push({ reason: "Contains potential irritants (Fragrance/Alcohol) for your sensitive skin." });
+            }
+        }
+        
+        // Dryness Check
+        const isDrying = product.ingredients.some(i => ['clay', 'charcoal', 'salicylic acid', 'kaolin'].includes(i.toLowerCase()));
+        if (metrics.hydration < 50 && isDrying && product.type !== 'CLEANSER') {
+             if (!warnings.some(w => w.reason.toLowerCase().includes('drying'))) {
+                warnings.push({ reason: "Ingredients may be too drying for your current hydration levels." });
+             }
+        }
+
+        // Acne Check (Comedogenic)
+        const comedogenic = ['coconut oil', 'cocoa butter', 'algae extract', 'myristyl myristate'];
+        const hasComedogenic = product.ingredients.some(i => comedogenic.includes(i.toLowerCase()));
+        if (metrics.acneActive < 60 && hasComedogenic) {
+             if (!warnings.some(w => w.reason.toLowerCase().includes('comedogenic'))) {
+                warnings.push({ reason: "Contains potential pore-clogging ingredients." });
+             }
+        }
+    } else {
+        // If ingredients missing, rely solely on AI risks.
+    }
+
+    // FINAL SYNC: Update score based on warnings (Penalty System)
+    // Instead of clamping to 45, we deduct points for each warning.
+    // This allows a great product with 1 minor warning to still be "Okay" (e.g. 70%)
+    let finalScore = score;
+    if (warnings.length > 0) {
+        const penalty = warnings.length * 12; // 12 points per warning
+        finalScore = Math.max(10, finalScore - penalty);
     }
     
-    if (metrics.hydration < 50 && product.ingredients.some(i => ['Clay', 'Charcoal', 'Salicylic Acid'].includes(i))) {
-        if (product.type !== 'CLEANSER') {
-            score = Math.min(score, 50);
-            warnings.push({ reason: "May be too drying for your current hydration levels." });
-        }
+    // If the original AI score was already low (reflecting risks), don't double dip too much, 
+    // but ensure it doesn't look like a 90% match if we found local warnings the AI missed.
+    if (warnings.length > 0 && finalScore > 75) {
+        finalScore = 75; // Cap at 75 (Caution zone) if there are warnings
     }
 
     return {
-        adjustedScore: score,
+        adjustedScore: Math.round(finalScore),
         warnings,
-        analysisReason: warnings.length > 0 ? "Safety Mismatch" : score > 80 ? "Great Match" : "Average Fit"
+        analysisReason: warnings.length > 0 ? "Potential Risks" : finalScore > 80 ? "Great Match" : "Average Fit"
     };
 };
 
@@ -574,11 +763,18 @@ export const getBuyingDecision = (product: Product, shelf: Product[], user: User
     let description = 'This product is okay, but check for better options.';
     let color = 'zinc';
 
-    if (audit.warnings.length > 0) {
+    // Updated Decision Logic to allow "Caution" instead of immediate "Avoid"
+    if (audit.adjustedScore < 50) {
         decision = 'AVOID';
         title = 'Bad Match';
-        description = 'Contains ingredients that conflict with your skin profile.';
+        description = 'Contains ingredients that significantly conflict with your skin.';
         color = 'rose';
+    } else if (audit.warnings.length > 0) {
+        // Good score but has warnings -> Caution
+        decision = 'CAUTION';
+        title = 'Check Risks';
+        description = 'Good match, but contains minor triggers for your skin.';
+        color = 'amber';
     } else if (context.conflicts.length > 0) {
         decision = 'CAUTION';
         title = 'Routine Conflict';
