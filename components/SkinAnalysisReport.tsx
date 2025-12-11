@@ -782,7 +782,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
 
   let verdictTagText = "";
   let verdictTagColor = "";
-  // Explicit type annotation to allow reassignment with different ReactNode types (array vs fragment)
+  // Explicitly type to allow React Fragment or Array
   let verdictBodyText: React.ReactNode = renderVerdict(groupAnalysis.summaryText);
 
   if (isAnonymous) {
@@ -841,7 +841,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                              <span className="text-xl font-black text-white">{groupAnalysis.priorityCategory}</span>
                         </div>
                         <div>
-                             <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Skin Type</span>
+                             <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Skin State</span>
                              <span className="text-xl font-black text-white flex items-center gap-1.5">
                                 {calculatedSkinType.split('+')[0].trim()}
                              </span>

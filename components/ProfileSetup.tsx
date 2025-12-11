@@ -7,13 +7,16 @@ import { signOut, auth } from '../services/firebase';
 // Helper to parse markdown-style bolding from AI response
 const renderFormattedText = (text: string) => {
   if (!text) return null;
-  // Split by bold markers (**text**)
+  // Clean up bullets/asterisks
+  const cleanText = text.replace(/^\s*\*\s*/gm, '• ').replace(/\*\*/g, ''); 
+  // We can also handle bolding properly:
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i} className="font-bold text-teal-800">{part.slice(2, -2)}</strong>;
     }
-    return <span key={i}>{part}</span>;
+    // Remove standalone asterisks that might be left over
+    return <span key={i}>{part.replace(/^\s*\*\s*/gm, '• ')}</span>;
   });
 };
 
@@ -228,14 +231,11 @@ const HistoryChart: React.FC<{ history: SkinMetrics[] }> = ({ history }) => {
             const midX = (points[i].x + points[i+1].x) / 2;
             const midY = (points[i].y + points[i+1].y) / 2;
             const p1 = points[i];
-            const p2 = points[i+1];
-
+            
             // Quadratic curve logic for smoothness
             if (i === 0) {
                  ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
             } else {
-                 const prevMidX = (points[i-1].x + points[i].x) / 2;
-                 const prevMidY = (points[i-1].y + points[i].y) / 2;
                  ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
             }
         }
@@ -253,7 +253,6 @@ const HistoryChart: React.FC<{ history: SkinMetrics[] }> = ({ history }) => {
         for (let i = 0; i < points.length - 1; i++) {
              const midX = (points[i].x + points[i+1].x) / 2;
              const midY = (points[i].y + points[i+1].y) / 2;
-             // Simple smoothing: use quadratic curve to midpoint
              if (i === points.length - 2) {
                  ctx.quadraticCurveTo(points[i].x, points[i].y, points[i+1].x, points[i+1].y);
              } else {
@@ -707,7 +706,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
              </div>
           )}
 
-          {/* GOAL PROGRESS CARDS */}
+          {/* GOAL PROGRESS CARDS (RESIZED SMALLER AS REQUESTED) */}
           <section>
                <div className="flex justify-between items-end mb-4 px-1">
                    <h3 className="text-xs font-bold text-teal-800/60 uppercase tracking-widest flex items-center gap-2">
@@ -742,12 +741,12 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                        const progressPercent = Math.min(100, Math.max(0, (stats.current / stats.target) * 100));
                        
                        return (
-                           <div key={goal} className="bg-white border border-teal-50 p-4 rounded-[1.25rem] shadow-sm relative overflow-hidden group">
+                           <div key={goal} className="bg-white border border-teal-50 p-3 rounded-2xl shadow-sm relative overflow-hidden group">
                                <div className="flex justify-between items-end mb-2 relative z-10">
                                    <div>
                                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">{stats.label}</span>
                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-2xl font-black text-zinc-900 tracking-tight">{stats.current}</span>
+                                          <span className="text-xl font-black text-zinc-900 tracking-tight">{stats.current}</span>
                                           <span className="text-[10px] font-bold text-zinc-300">/ {stats.target}</span>
                                        </div>
                                    </div>
