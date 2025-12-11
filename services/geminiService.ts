@@ -380,12 +380,12 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
                CRITICAL: If the ingredient list is blurry, small, or hidden, YOU MUST USE GOOGLE SEARCH to find the official "Full Ingredients List (INCI)" for this exact product name. Do not guess.
                Search Sources: Watsons Malaysia, Guardian MY, Sephora MY, INCIDecoder, Skincarisma.
             3. PRICE: Search for the current price in MYR (Malaysian Ringgit).
-            4. SCORING STRATEGY:
-               - Start with 100.
-               - Check for 'Star Actives' that match user needs (e.g. Salicylic for Acne).
-               - Check for Risks (Alcohol/Fragrance for Sensitive skin).
-               - Deduct 10-15 points per risk. Do NOT hard clamp the score.
-               - A product with risks should naturally fall to 60-75 range, not 0.
+            4. SCORING STRATEGY (IMPORTANT):
+               - BASE SCORE: Start at 85.
+               - BONUS: Add +5 points for EACH "Star Active" that specifically helps the user (e.g., Salicylic Acid for Acne, Ceramides for Dryness). Max Bonus +20.
+               - PENALTY: Deduct ONLY 3-5 points for minor risks (Fragrance/Alcohol). Do not over-penalize.
+               - If the product is a "Holy Grail" or widely recommended for this skin type, the final score should be HIGH (85-99).
+               - Only give a low score (<60) if the product contains ingredients that are ACTIVELY HARMFUL or contraindicated for this user.
             
             Return STRICT JSON:
             {
@@ -483,8 +483,9 @@ export const findBetterAlternatives = async (originalProductType: string, user: 
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Search for 3 highly-rated ${originalProductType} products suitable for ${skinType} skin ${concern ? `targeting ${concern}` : ''} available at Watsons Malaysia, Guardian, or Sephora.
-            Return STRICT JSON array: [{ "name": "Product Name", "brand": "Brand", "rating": 4.8 }]`,
+            contents: `Search for 3 "Holy Grail" top-rated ${originalProductType} products specifically for ${skinType} skin ${concern ? `targeting ${concern}` : ''}.
+            Focus on products available at Watsons Malaysia, Guardian, or Sephora that are highly recommended by dermatologists.
+            Return STRICT JSON array: [{ "name": "Product Name", "brand": "Brand", "rating": 4.9 }]`,
             config: {
                 tools: [{ googleSearch: {} }]
             }
@@ -514,11 +515,12 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
            - Find current price in MYR.
            - IMPORTANT: You MUST extract the actual list of ingredients.
         
-        2. ANALYZE:
-           - Check for allergens if Sensitivity < 60.
-           - Check for pore-cloggers if Acne < 60.
-           - Scoring: Start at 100. Deduct 10-15 pts per risk. Do NOT clamp score to 0. A risk implies Caution (60-75%), not Avoid (<40%) unless toxic.
-           - Bonus: Add points for matching actives.
+        2. ANALYZE & SCORE:
+           - BASE SCORE: Start at 85 (Good baseline).
+           - BENEFIT BONUS: Add +5 to +10 points if it contains "Star Ingredients" perfectly matched to the user (e.g. Niacinamide for Oily skin).
+           - RISK PENALTY: Deduct ONLY 3-5 points for minor risks (e.g. Fragrance). 
+           - If the product addresses the user's main concern (e.g. Salicylic Acid for Acne user), the score should remain HIGH (>85) even with minor risks.
+           - Only use LOW SCORES (<60) for dangerous mismatches (e.g. Pore-clogging oil for severe acne).
 
         3. OUTPUT: Strict JSON format.
         {
@@ -619,23 +621,31 @@ export const auditProduct = (product: Product, user: UserProfile) => {
                 warnings.push({ reason: "Contains potential pore-clogging ingredients." });
              }
         }
+
+        // LOCAL BONUS: Boost score for specific beneficial actives
+        const topActives = ['Retinol', 'Vitamin C', 'Niacinamide', 'Ceramides', 'Hyaluronic Acid', 'Salicylic Acid'];
+        const hasTopActive = product.ingredients.some(i => topActives.some(a => i.toLowerCase().includes(a.toLowerCase())));
+        if (hasTopActive) {
+            score += 5; // Local boost for powerful ingredients
+        }
+
     } else {
         // If ingredients missing, rely solely on AI risks.
     }
 
     // FINAL SYNC: Update score based on warnings (Penalty System)
-    // Instead of clamping to 45, we deduct points for each warning.
-    // This allows a great product with 1 minor warning to still be "Okay" (e.g. 70%)
+    // Relaxed PENALTY: 4 points per warning.
     let finalScore = score;
     if (warnings.length > 0) {
-        const penalty = warnings.length * 12; // 12 points per warning
+        const penalty = warnings.length * 4; 
         finalScore = Math.max(10, finalScore - penalty);
     }
     
-    // If the original AI score was already low (reflecting risks), don't double dip too much, 
-    // but ensure it doesn't look like a 90% match if we found local warnings the AI missed.
-    if (warnings.length > 0 && finalScore > 75) {
-        finalScore = 75; // Cap at 75 (Caution zone) if there are warnings
+    // STRICT CAP FOR WARNINGS:
+    // User wants 90+ to be exclusively for "Perfect" products.
+    // Products with warnings should hover around 80.
+    if (warnings.length > 0 && finalScore >= 85) {
+        finalScore = 85; 
     }
 
     return {

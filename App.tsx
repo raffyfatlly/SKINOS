@@ -485,45 +485,16 @@ const App: React.FC = () => {
 
       const { verdict, audit, shelfConflicts, existingSameType, comparison } = getBuyingDecision(lastScannedProduct, shelf, user);
       
-      const getColorClasses = (color: string) => {
+      // Sleek Theme Generator
+      const getTheme = (color: string) => {
           switch(color) {
-              case 'emerald': return { 
-                  bg: 'bg-emerald-500', 
-                  text: 'text-emerald-700', 
-                  light: 'bg-emerald-50', 
-                  border: 'border-emerald-100', 
-                  gradient: 'from-emerald-500 to-emerald-600',
-                  icon: ShieldCheck 
-              };
-              case 'rose': return { 
-                  bg: 'bg-rose-500', 
-                  text: 'text-rose-700', 
-                  light: 'bg-rose-50', 
-                  border: 'border-rose-100', 
-                  gradient: 'from-rose-500 to-rose-600',
-                  icon: AlertTriangle 
-              };
-              case 'amber': return { 
-                  bg: 'bg-amber-500', 
-                  text: 'text-amber-700', 
-                  light: 'bg-amber-50', 
-                  border: 'border-amber-100', 
-                  gradient: 'from-amber-400 to-amber-500',
-                  icon: AlertOctagon 
-              };
-              case 'zinc': 
-              default: return { 
-                  bg: 'bg-zinc-500', 
-                  text: 'text-zinc-600', 
-                  light: 'bg-zinc-100', 
-                  border: 'border-zinc-200', 
-                  gradient: 'from-zinc-500 to-zinc-600',
-                  icon: HelpCircle 
-              }; 
+              case 'emerald': return { text: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', icon: ShieldCheck };
+              case 'rose': return { text: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', icon: AlertTriangle };
+              case 'amber': return { text: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', icon: AlertOctagon };
+              default: return { text: 'text-zinc-600', bg: 'bg-zinc-50', border: 'border-zinc-200', icon: HelpCircle };
           }
       }
-      
-      const theme = getColorClasses(verdict.color);
+      const theme = getTheme(verdict.color);
       
       const sortedBenefits = [...lastScannedProduct.benefits].sort((a, b) => {
           const scoreA = user.biometrics[a.target as keyof SkinMetrics] as number || 100;
@@ -533,7 +504,7 @@ const App: React.FC = () => {
 
       const isLowScore = audit.adjustedScore < 50;
       const isCaution = audit.warnings.length > 0 && !isLowScore;
-      const showFindBetter = audit.adjustedScore < 70;
+      const showFindBetter = audit.adjustedScore < 75;
 
       return (
         <div className="fixed inset-0 z-50 flex flex-col bg-zinc-900/60 backdrop-blur-md animate-in slide-in-from-bottom-full duration-500">
@@ -541,8 +512,8 @@ const App: React.FC = () => {
                 
                 {/* 1. Header with Close */}
                 <div className="px-6 py-4 flex items-center justify-between border-b border-zinc-50 bg-white sticky top-0 z-20">
-                    <div className="flex items-center gap-2">
-                         <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-500">
+                    <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-[1rem] bg-zinc-50 flex items-center justify-center text-zinc-500 border border-zinc-100">
                              {getProductIcon(lastScannedProduct.type)}
                          </div>
                          <div>
@@ -550,7 +521,7 @@ const App: React.FC = () => {
                              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{lastScannedProduct.brand}</p>
                          </div>
                     </div>
-                    <button onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }} className="w-9 h-9 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-zinc-100 transition-colors">
+                    <button onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }} className="w-9 h-9 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-zinc-100 transition-colors hover:text-zinc-900">
                         <X size={18} />
                     </button>
                 </div>
@@ -558,35 +529,37 @@ const App: React.FC = () => {
                 {/* 2. Scrollable Content */}
                 <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8 bg-white relative pb-32">
                     
-                    {/* HERO SCORE CARD */}
-                    <div className={`rounded-[2rem] p-8 text-white bg-gradient-to-br ${theme.gradient} shadow-lg relative overflow-hidden group`}>
-                         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-colors duration-700"></div>
-                         
-                         <div className="relative z-10 flex flex-col items-center text-center">
-                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase tracking-widest mb-4 border border-white/20">
-                                 <theme.icon size={12} /> {verdict.title}
-                             </div>
-                             <h1 className="text-8xl font-black tracking-tighter mb-2 drop-shadow-sm">{audit.adjustedScore}%</h1>
-                             <p className="text-white/90 font-medium text-sm max-w-[260px] leading-relaxed">{verdict.description}</p>
+                    {/* SLEEK HERO SCORE SECTION */}
+                    <div className="flex flex-col items-center justify-center py-2 text-center animate-in zoom-in-95 duration-500">
+                         <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${theme.bg} ${theme.text} ${theme.border} border text-[10px] font-bold uppercase tracking-widest mb-4`}>
+                             <theme.icon size={12} /> {verdict.title}
                          </div>
+                         
+                         <h1 className={`text-8xl font-black tracking-tighter mb-2 ${theme.text} opacity-90`}>
+                            {audit.adjustedScore}
+                         </h1>
+                         
+                         <p className="text-zinc-500 font-medium text-sm max-w-[260px] leading-relaxed mx-auto">
+                            {verdict.description}
+                         </p>
                     </div>
 
-                    {/* FIND BETTER ALTERNATIVES (Contextual) */}
+                    {/* FIND BETTER ALTERNATIVES (Clean Outline Style) */}
                     {showFindBetter && (
                         <div className="animate-in fade-in slide-in-from-bottom-4">
                              <button 
                                 onClick={handleFindAlternatives}
                                 disabled={isSearchingAlternatives || alternatives.length > 0}
-                                className="w-full py-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold text-xs uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-80"
+                                className="w-full py-4 rounded-2xl bg-white border border-indigo-200 text-indigo-600 font-bold text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
                              >
                                  {isSearchingAlternatives ? (
                                      <>
                                         <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                                        Searching Top Picks...
+                                        Searching...
                                      </>
                                  ) : alternatives.length > 0 ? (
                                      <>
-                                        <Sparkles size={16} /> Alternatives Found below
+                                        <Sparkles size={16} /> Top Picks Found
                                      </>
                                  ) : (
                                      <>
@@ -600,25 +573,25 @@ const App: React.FC = () => {
                                      {isAnalyzingAlternative && (
                                           <div className="p-4 rounded-2xl bg-zinc-50 flex items-center justify-center gap-3">
                                               <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin"></div>
-                                              <span className="text-xs font-bold text-zinc-600">Analyzing Selection...</span>
+                                              <span className="text-xs font-bold text-zinc-600">Analyzing...</span>
                                           </div>
                                      )}
                                      {alternatives.map((alt, i) => (
                                          <button 
                                             key={i}
                                             onClick={() => handleSelectAlternative(alt)}
-                                            className="w-full text-left bg-white p-4 rounded-[1.5rem] border border-indigo-50 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group flex justify-between items-center"
+                                            className="w-full text-left bg-white p-4 rounded-[1.5rem] border border-zinc-100 hover:border-indigo-200 hover:shadow-md transition-all group flex justify-between items-center"
                                          >
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold text-xs">
+                                                <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold text-xs border border-indigo-100">
                                                     #{i+1}
                                                 </div>
                                                 <div>
-                                                    <h5 className="font-bold text-sm text-zinc-900 leading-tight mb-0.5 group-hover:text-indigo-700 transition-colors">{alt.name}</h5>
+                                                    <h5 className="font-bold text-sm text-zinc-900 leading-tight mb-0.5">{alt.name}</h5>
                                                     <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{alt.brand}</p>
                                                 </div>
                                             </div>
-                                            <ChevronRight size={18} className="text-zinc-300 group-hover:text-indigo-500" />
+                                            <ChevronRight size={16} className="text-zinc-300 group-hover:text-indigo-500" />
                                          </button>
                                      ))}
                                  </div>
@@ -626,34 +599,36 @@ const App: React.FC = () => {
                         </div>
                     )}
 
-                    {/* ANALYSIS SECTION */}
-                    <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                             <CheckCircle2 size={14} className="text-teal-500" /> Clinical Verdict
-                        </h3>
-
-                        {/* 1. SAFETY/RISKS */}
+                    {/* ANALYSIS DETAILS */}
+                    <div className="space-y-6">
+                        {/* 1. SAFETY ALERT (Clean Card) */}
                         {audit.warnings.length > 0 && (
-                            <div className={`p-5 rounded-[1.5rem] border ${isCaution ? 'bg-amber-50 border-amber-100' : 'bg-rose-50 border-rose-100'}`}>
+                            <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-100 relative overflow-hidden">
+                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${isCaution ? 'bg-amber-400' : 'bg-rose-400'}`} />
                                 <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${isCaution ? 'text-amber-700' : 'text-rose-700'}`}>
-                                    <AlertTriangle size={14} /> Safety Alert
+                                    <AlertTriangle size={14} /> Safety Check
                                 </h4>
-                                <ul className="space-y-2">
+                                <ul className="space-y-3">
                                     {audit.warnings.map((w, i) => (
-                                        <li key={i} className={`text-sm font-medium leading-relaxed ${isCaution ? 'text-amber-800' : 'text-rose-800'}`}>
-                                            • {w.reason}
+                                        <li key={i} className="flex items-start gap-3 text-sm font-medium text-zinc-700">
+                                            <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${isCaution ? 'bg-amber-400' : 'bg-rose-400'}`} />
+                                            <span className="leading-relaxed">{w.reason}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
                         )}
 
-                        {/* 2. BENEFITS */}
-                        <div className="p-5 bg-zinc-50 rounded-[1.5rem] border border-zinc-100">
-                             <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <FlaskConical size={14} /> Formula Intelligence
-                             </h4>
-                             <div className="space-y-3">
+                        {/* 2. BENEFITS (Clean List) */}
+                        <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-100">
+                             <div className="flex justify-between items-center mb-4">
+                                <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+                                    <FlaskConical size={14} className="text-teal-500" /> Key Actives
+                                </h4>
+                                <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded uppercase">Verified</span>
+                             </div>
+                             
+                             <div className="space-y-4">
                                 {sortedBenefits.slice(0, 3).map((benefit, i) => {
                                     const userScore = user.biometrics[benefit.target as keyof SkinMetrics] as number || 0;
                                     const isRelevant = userScore < 70;
@@ -661,61 +636,62 @@ const App: React.FC = () => {
                                     if (isLowScore && !isRelevant) return null;
 
                                     return (
-                                        <div key={i} className="flex gap-3 items-start bg-white p-3 rounded-2xl border border-zinc-100 shadow-sm">
-                                            <div className={`mt-0.5 ${isRelevant ? 'text-teal-500' : 'text-zinc-400'}`}>
-                                                <Zap size={16} />
+                                        <div key={i} className="flex gap-4 items-start">
+                                            <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${isRelevant ? 'bg-teal-50 text-teal-600' : 'bg-zinc-50 text-zinc-400'}`}>
+                                                <Zap size={14} />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 mb-0.5">
-                                                    <span className="text-xs font-bold text-zinc-900">{benefit.ingredient}</span>
-                                                    {isRelevant && <span className="text-[9px] font-bold bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded uppercase">Targeted</span>}
+                                                    <span className="text-sm font-bold text-zinc-900">{benefit.ingredient}</span>
+                                                    {isRelevant && <span className="text-[9px] font-bold text-teal-600 bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded uppercase">Targeted</span>}
                                                 </div>
-                                                <p className="text-xs text-zinc-600 leading-snug">{benefit.description}</p>
+                                                <p className="text-xs text-zinc-500 leading-relaxed">{benefit.description}</p>
                                             </div>
                                         </div>
                                     )
                                 })}
                                 {sortedBenefits.length === 0 && (
-                                    <p className="text-xs text-zinc-400 font-medium italic">No key active ingredients detected for your specific needs.</p>
+                                    <p className="text-xs text-zinc-400 font-medium italic pl-1">No major active ingredients detected.</p>
                                 )}
                              </div>
                         </div>
 
                         {/* 3. SHELF CONTEXT */}
                         {shelfConflicts.length > 0 && (
-                            <div className="p-5 bg-amber-50 border border-amber-100 rounded-[1.5rem]">
-                                <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-100 relative overflow-hidden">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400" />
+                                <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center gap-2">
                                     <AlertOctagon size={14} /> Routine Conflict
                                 </h4>
-                                <p className="text-sm text-amber-800 font-medium leading-relaxed">
+                                <p className="text-xs text-zinc-600 font-medium leading-relaxed pl-6">
                                     {shelfConflicts[0]}
                                 </p>
                             </div>
                         )}
                         
                         {existingSameType.length > 0 && shelfConflicts.length === 0 && (
-                            <div className="p-5 bg-zinc-100 rounded-[1.5rem] border border-zinc-200">
-                                <h4 className="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <div className="bg-zinc-50 rounded-[1.5rem] p-5 border border-zinc-100">
+                                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                                     <ArrowRightLeft size={14} /> Comparison
                                 </h4>
-                                <p className="text-sm text-zinc-600 font-medium leading-relaxed">
+                                <p className="text-xs text-zinc-600 font-medium leading-relaxed">
                                     {comparison.result === 'BETTER' 
-                                        ? `This scores higher than your current ${existingSameType[0].name}.` 
+                                        ? `Scores higher than your current ${existingSameType[0].name}.` 
                                         : comparison.result === 'WORSE'
                                         ? `Your current ${existingSameType[0].name} is a better match.`
-                                        : `Similar performance to your current ${existingSameType[0].name}.`}
+                                        : `Similar performance to your current product.`}
                                 </p>
                             </div>
                         )}
                     </div>
 
-                    {/* INGREDIENTS */}
-                    <div className="pt-4">
+                    {/* INGREDIENTS LIST */}
+                    <div className="pt-4 border-t border-zinc-50">
                         <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 pl-1">Full Ingredients</h3>
                         <div className="flex flex-wrap gap-1.5">
                             {lastScannedProduct.ingredients.length > 0 ? (
                                 lastScannedProduct.ingredients.map((ing, i) => (
-                                    <span key={i} className="px-2.5 py-1 bg-zinc-50 border border-zinc-100 text-zinc-500 text-[10px] font-bold rounded-lg uppercase tracking-wide">
+                                    <span key={i} className="px-2.5 py-1 bg-white border border-zinc-100 text-zinc-500 text-[10px] font-bold rounded-lg uppercase tracking-wide">
                                         {ing}
                                     </span>
                                 ))
@@ -726,18 +702,18 @@ const App: React.FC = () => {
                     </div>
                 </div>
                 
-                {/* 3. Footer Actions */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/95 backdrop-blur-xl border-t border-zinc-100 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-30">
+                {/* 3. Footer Actions (Clean) */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/95 backdrop-blur-xl border-t border-zinc-100 z-30">
                     <div className="grid grid-cols-2 gap-4">
                          <button 
                             onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }}
-                            className="py-4 rounded-[1.2rem] font-bold text-xs uppercase tracking-widest text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 transition-colors"
+                            className="py-4 rounded-[1.2rem] border border-zinc-200 text-zinc-500 font-bold text-xs uppercase tracking-widest hover:bg-zinc-50 hover:text-zinc-700 transition-colors"
                          >
                             Discard
                          </button>
                          <button 
                             onClick={addToShelf}
-                            className="py-4 rounded-[1.2rem] bg-zinc-900 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-zinc-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            className="py-4 rounded-[1.2rem] bg-zinc-900 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-zinc-900/10 hover:bg-zinc-800 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                          >
                             <ShoppingBag size={16} /> Add to Shelf
                          </button>
