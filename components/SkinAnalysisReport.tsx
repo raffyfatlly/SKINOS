@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
@@ -232,6 +230,21 @@ const MetricModal: React.FC<MetricModalProps> = ({ metric, score, age, observati
     )
 }
 
+const getIngredientIcon = (name: string, action: string) => {
+    const n = name.toLowerCase();
+    const a = action.toLowerCase();
+    
+    if (n.includes('acid') || n.includes('bha') || n.includes('aha')) return <FlaskConical size={18} />;
+    if (n.includes('vitamin c') || n.includes('bright') || a.includes('glow')) return <Sun size={18} />;
+    if (n.includes('retinol') || n.includes('retinal') || n.includes('peptide')) return <Activity size={18} />;
+    if (n.includes('hyaluronic') || n.includes('glycerin') || a.includes('hydrat')) return <Droplet size={18} />;
+    if (n.includes('niacinamide') || n.includes('zinc')) return <ShieldCheck size={18} />;
+    if (n.includes('spf') || a.includes('protect')) return <ShieldAlert size={18} />;
+    if (n.includes('oil') || n.includes('extract')) return <Pipette size={18} />;
+    
+    return <Sparkles size={18} />;
+};
+
 interface RoutineRecommendation {
     ingredients: string[];
     benefit: string;
@@ -241,7 +254,15 @@ interface RoutineRecommendation {
     isFallback: boolean;
 }
 
-const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[]; onRescan: () => void; onConsultAI: (query: string) => void; }> = ({ userProfile, shelf, onRescan, onConsultAI }) => {
+interface SkinAnalysisReportProps {
+  userProfile: UserProfile;
+  shelf: Product[];
+  onRescan: () => void;
+  onConsultAI: (query: string) => void;
+  onViewProgress?: () => void;
+}
+
+const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, shelf, onRescan, onConsultAI, onViewProgress }) => {
   const metrics = userProfile.biometrics;
   const history = userProfile.scanHistory || [];
   const prevMetrics = history.length > 1 ? history[history.length - 2] : null;
@@ -754,18 +775,39 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
   const priorityColor = groupAnalysis.priorityScore > 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-rose-600 bg-rose-50 border-rose-100';
   const priorityLabel = groupAnalysis.priorityScore > 80 ? 'Maintenance' : 'Focus';
 
-  // Helper to get visual icon based on action/name
-  const getIngredientIcon = (name: string, action: string) => {
-      const lowerName = name.toLowerCase();
-      const lowerAction = action.toLowerCase();
-      
-      if (lowerAction.includes('hydrate') || lowerName.includes('hyaluronic') || lowerName.includes('glycerin') || lowerName.includes('polyglutamic')) return <Droplet size={18} />;
-      if (lowerAction.includes('clear') || lowerAction.includes('pore') || lowerName.includes('salicylic') || lowerName.includes('bha')) return <Sparkles size={18} />;
-      if (lowerAction.includes('brighten') || lowerName.includes('vitamin c') || lowerName.includes('niacinamide')) return <Zap size={18} />;
-      if (lowerAction.includes('soothe') || lowerName.includes('centella') || lowerName.includes('ceramides')) return <ShieldCheck size={18} />;
-      if (lowerAction.includes('age') || lowerAction.includes('firm') || lowerName.includes('retinol') || lowerName.includes('peptide')) return <Activity size={18} />;
-      
-      return <FlaskConical size={18} />;
+  // LOGIC FOR CLINICAL VERDICT TAG
+  const isAnonymous = userProfile.isAnonymous;
+  const hasHistory = userProfile.scanHistory && userProfile.scanHistory.length > 1;
+
+  let verdictTagText = "";
+  let verdictTagColor = "";
+  let verdictBodyText = renderVerdict(groupAnalysis.summaryText);
+
+  if (isAnonymous) {
+      verdictTagText = "BASELINE SET";
+      verdictTagColor = "bg-zinc-100 text-zinc-600 border-zinc-200";
+      // Enhance body text for guest
+      verdictBodyText = (
+          <>
+            {verdictBodyText} <span className="block mt-2 font-medium italic text-teal-600/80">Rescan regularly to build a clinical history and unlock trend analysis.</span>
+          </>
+      );
+  } else if (!hasHistory) {
+       verdictTagText = "BASELINE ESTABLISHED";
+       verdictTagColor = "bg-zinc-100 text-zinc-600 border-zinc-200";
+  } else {
+       // Registered user with history
+       const status = progressVerdict.status.toUpperCase();
+       verdictTagText = status;
+       
+       if (status === 'IMPROVING' || status === 'MAINTAINED') {
+           verdictTagColor = "bg-emerald-50 text-emerald-700 border-emerald-100";
+       } else if (status === 'DECLINING' || status === 'PERSISTENT') {
+           verdictTagColor = "bg-rose-50 text-rose-700 border-rose-100";
+       } else {
+           verdictTagText = "STABLE";
+           verdictTagColor = "bg-zinc-50 text-zinc-600 border-zinc-200";
+       }
   }
 
   return (
@@ -808,9 +850,8 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
         </div>
 
         {/* CLINICAL VERDICT SECTION */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-zinc-100 tech-reveal delay-100 mb-6 flex">
-             <div className="w-1.5 self-stretch bg-teal-500 rounded-full mr-5"></div>
-             <div className="flex-1 py-1">
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-zinc-100 tech-reveal delay-100 flex flex-col sm:flex-row gap-4">
+             <div className="flex-1">
                  <div className="flex items-center justify-between mb-3">
                      <div className="flex items-center gap-2">
                         <Stethoscope size={14} className="text-teal-500" />
@@ -818,14 +859,23 @@ const SkinAnalysisReport: React.FC<{ userProfile: UserProfile; shelf: Product[];
                             Clinical Verdict
                         </h3>
                      </div>
-                     <span className={`text-[9px] font-bold px-2 py-1 rounded ${groupAnalysis.priorityScore > 80 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                        {groupAnalysis.priorityScore > 80 ? 'MAINTENANCE' : 'ACTION REQUIRED'}: {groupAnalysis.priorityCategory.toUpperCase()}
+                     <span className={`text-[9px] font-bold px-2 py-1 rounded border ${verdictTagColor}`}>
+                        {verdictTagText}
                      </span>
                  </div>
                  <p className="text-sm text-zinc-600 font-normal leading-relaxed">
-                    {renderVerdict(groupAnalysis.summaryText)}
+                    {verdictBodyText}
                  </p>
              </div>
+             
+             {!isAnonymous && hasHistory && onViewProgress && (
+                 <button 
+                    onClick={onViewProgress}
+                    className="shrink-0 flex items-center justify-center gap-2 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 rounded-xl px-5 py-3 text-xs font-bold uppercase tracking-wide border border-zinc-200 transition-colors self-start sm:self-center w-full sm:w-auto"
+                 >
+                    <TrendingUp size={14} /> See My Progress
+                 </button>
+             )}
         </div>
 
         <div ref={chartRef} className="modern-card rounded-[2.5rem] p-10 flex flex-col items-center relative overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-100 chart-container group cursor-crosshair">

@@ -326,6 +326,7 @@ const App: React.FC = () => {
           <div className="pt-0 min-h-screen bg-white animate-in fade-in">
              <ProfileSetup 
                 user={user} 
+                shelf={shelf}
                 onComplete={(updatedUser) => {
                     setUser(updatedUser);
                     saveUserData(updatedUser, shelf);
@@ -405,6 +406,7 @@ const App: React.FC = () => {
                         setAiTriggerQuery(query);
                         setIsAiChatOpen(true);
                     }}
+                    onViewProgress={() => setView(AppView.PROFILE_SETUP)}
                 />
              </div>
           </div>
