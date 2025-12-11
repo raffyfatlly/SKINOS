@@ -1,8 +1,21 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { UserProfile, UserPreferences, SkinMetrics, Product } from '../types';
-import { ArrowLeft, Check, Sparkles, Target, Zap, Activity, TrendingUp, LineChart, X, Trash2, Settings2, ChevronDown, ChevronRight, Minus, Trophy, LogOut, AlertCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Check, Sparkles, Target, Zap, Activity, TrendingUp, LineChart, X, Trash2, Settings2, ChevronDown, ChevronRight, Minus, Trophy, LogOut, AlertCircle, Clock, Calendar, Edit2 } from 'lucide-react';
 import { signOut, auth } from '../services/firebase';
+
+// Helper to parse markdown-style bolding from AI response
+const renderFormattedText = (text: string) => {
+  if (!text) return null;
+  // Split by bold markers (**text**)
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-bold text-teal-800">{part.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+};
 
 interface ProfileSetupProps {
   user: UserProfile;
@@ -11,6 +24,64 @@ interface ProfileSetupProps {
   onBack: () => void;
   onReset: () => void;
 }
+
+// --- SUB-COMPONENT: MONTH GROUP (Expandable) ---
+const MonthGroup: React.FC<{ 
+    monthYear: string; 
+    scans: SkinMetrics[]; 
+    onSelect: (s: SkinMetrics) => void 
+}> = ({ monthYear, scans, onSelect }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <div className="border-b border-zinc-100 last:border-0 bg-white">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between py-4 pl-6 pr-6 text-left hover:bg-zinc-50 transition-colors group"
+            >
+                <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm border ${isOpen ? 'bg-teal-50 text-teal-600 border-teal-100' : 'bg-white text-zinc-400 border-zinc-100 group-hover:border-zinc-200'}`}>
+                        <Calendar size={14} />
+                    </div>
+                    <div>
+                        <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest leading-none mb-1">{monthYear}</h4>
+                        <span className="text-[10px] text-zinc-400 font-medium">{scans.length} Scan{scans.length !== 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+                <div className={`transition-transform duration-300 text-zinc-300 ${isOpen ? 'rotate-180 text-teal-500' : ''}`}>
+                    <ChevronDown size={16} />
+                </div>
+            </button>
+            
+            {isOpen && (
+                <div className="space-y-2 pb-6 px-6 pt-1 animate-in slide-in-from-top-2 duration-300 bg-zinc-50/50 border-t border-zinc-50">
+                    {scans.map((entry) => (
+                          <button 
+                              key={entry.timestamp} 
+                              onClick={() => onSelect(entry)}
+                              className="w-full bg-white border border-zinc-100 hover:border-teal-200 hover:shadow-md p-3 rounded-xl flex items-center justify-between shadow-sm transition-all duration-200 group/item text-left relative overflow-hidden"
+                          >
+                               <div className="flex items-center gap-3 relative z-10">
+                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-xs transition-colors border ${entry.overallScore > 80 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : entry.overallScore < 60 ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                      {entry.overallScore}
+                                  </div>
+                                  <div>
+                                      <span className="block text-xs font-bold text-zinc-900 mb-0.5">
+                                          {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-zinc-400 group-hover/item:text-teal-600 transition-colors">
+                                          View Analysis
+                                      </span>
+                                  </div>
+                              </div>
+                              <ChevronRight size={14} className="text-zinc-200 group-hover/item:text-teal-400 transition-colors" />
+                          </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 // --- SUB-COMPONENT: GOAL EDIT MODAL ---
 const GoalEditModal: React.FC<{ 
@@ -261,9 +332,9 @@ const ScanDetailModal: React.FC<{ scan: SkinMetrics; onClose: () => void }> = ({
                         <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                             <Activity size={14} className="text-teal-500" /> Primary Analysis
                         </h4>
-                        <p className="text-sm font-medium text-zinc-700 leading-relaxed">
-                            {scan.analysisSummary || `During this scan, your primary concern was ${primaryIssue.label.toLowerCase()} (Score: ${primaryIssue.val}).`}
-                        </p>
+                        <div className="text-sm font-medium text-zinc-700 leading-relaxed">
+                            {renderFormattedText(scan.analysisSummary || `During this scan, your primary concern was ${primaryIssue.label.toLowerCase()} (Score: ${primaryIssue.val}).`)}
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -306,6 +377,14 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [selectedScan, setSelectedScan] = useState<SkinMetrics | null>(null);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  
+  // Editing State
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState(user.name);
+  const [editAge, setEditAge] = useState(user.age.toString());
+  
+  // Clear Data Confirmation
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   
   const history = useMemo(() => user.scanHistory || [user.biometrics], [user.scanHistory, user.biometrics]);
 
@@ -361,6 +440,17 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
   const handleGoalsSave = (newPrefs: UserPreferences) => {
       onComplete({ ...user, preferences: newPrefs });
       setIsGoalModalOpen(false);
+  };
+  
+  const handleSaveProfile = () => {
+      if (editName && editAge) {
+          onComplete({
+              ...user,
+              name: editName,
+              age: parseInt(editAge)
+          });
+          setIsEditingProfile(false);
+      }
   };
 
   const handleSignOut = async () => {
@@ -514,13 +604,50 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
               </div>
 
               <div className="flex items-center gap-5 mb-8">
-                  <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shadow-inner border border-white/20 text-2xl font-black">
+                  <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shadow-inner border border-white/20 text-2xl font-black shrink-0">
                       {user.name.charAt(0)}
                   </div>
-                  <div>
-                      <h1 className="text-3xl font-black tracking-tighter text-white">{user.name}</h1>
-                      <p className="text-sm font-medium text-teal-100/90">{user.age} Years • {user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin</p>
-                      {auth && auth.currentUser && (
+                  <div className="flex-1 min-w-0">
+                      {isEditingProfile ? (
+                          <div className="animate-in fade-in space-y-2">
+                                <input 
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-2xl font-black text-white w-full focus:outline-none focus:bg-white/20"
+                                    placeholder="Name"
+                                />
+                                <div className="flex items-center gap-2">
+                                     <input 
+                                        type="number"
+                                        value={editAge}
+                                        onChange={(e) => setEditAge(e.target.value)}
+                                        className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm font-bold text-white w-20 focus:outline-none focus:bg-white/20"
+                                        placeholder="Age"
+                                    />
+                                    <span className="text-teal-100 text-xs font-medium whitespace-nowrap">Years</span>
+                                    
+                                    <div className="flex-1 flex justify-end gap-2 ml-2">
+                                         <button onClick={() => setIsEditingProfile(false)} className="p-1.5 bg-white/10 rounded-lg text-white hover:bg-white/20"><X size={16}/></button>
+                                         <button onClick={handleSaveProfile} className="p-1.5 bg-white rounded-lg text-teal-700 hover:bg-teal-50"><Check size={16}/></button>
+                                    </div>
+                                </div>
+                          </div>
+                      ) : (
+                          <>
+                             <div className="flex items-center gap-3">
+                                 <h1 className="text-3xl font-black tracking-tighter text-white truncate">{user.name}</h1>
+                                 <button onClick={() => {
+                                     setEditName(user.name);
+                                     setEditAge(user.age.toString());
+                                     setIsEditingProfile(true);
+                                 }} className="p-1.5 bg-white/10 rounded-full text-white/80 hover:bg-white/20 hover:text-white transition-all">
+                                     <Edit2 size={14} />
+                                 </button>
+                             </div>
+                             <p className="text-sm font-medium text-teal-100/90 mt-1">{user.age} Years • {user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin</p>
+                          </>
+                      )}
+                      {auth && auth.currentUser && !isEditingProfile && (
                           <span className="text-[10px] font-bold bg-teal-500/40 px-2 py-0.5 rounded text-white mt-1 inline-block">Cloud Synced</span>
                       )}
                   </div>
@@ -608,33 +735,33 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                   </div>
                )}
                
-               <div className="space-y-4">
+               <div className="space-y-3">
                   {user.preferences?.goals.map(goal => {
                        const stats = getGoalProgress(goal, latest, initial);
                        if (!stats) return null;
                        const progressPercent = Math.min(100, Math.max(0, (stats.current / stats.target) * 100));
                        
                        return (
-                           <div key={goal} className="bg-white border border-teal-50 p-5 rounded-[1.5rem] shadow-sm relative overflow-hidden group">
-                               <div className="flex justify-between items-end mb-3 relative z-10">
+                           <div key={goal} className="bg-white border border-teal-50 p-4 rounded-[1.25rem] shadow-sm relative overflow-hidden group">
+                               <div className="flex justify-between items-end mb-2 relative z-10">
                                    <div>
-                                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">{stats.label}</span>
-                                       <div className="flex items-center gap-2">
-                                          <span className="text-3xl font-black text-zinc-900 tracking-tight">{stats.current}</span>
-                                          <span className="text-xs font-bold text-zinc-300">/ {stats.target}</span>
+                                       <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">{stats.label}</span>
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="text-2xl font-black text-zinc-900 tracking-tight">{stats.current}</span>
+                                          <span className="text-[10px] font-bold text-zinc-300">/ {stats.target}</span>
                                        </div>
                                    </div>
-                                   <div className={`px-2.5 py-1 rounded-lg text-xs font-bold ${stats.delta > 0 ? 'bg-emerald-50 text-emerald-600' : stats.delta < 0 ? 'bg-rose-50 text-rose-600' : 'bg-zinc-50 text-zinc-400'}`}>
+                                   <div className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${stats.delta > 0 ? 'bg-emerald-50 text-emerald-600' : stats.delta < 0 ? 'bg-rose-50 text-rose-600' : 'bg-zinc-50 text-zinc-400'}`}>
                                        {stats.delta > 0 ? 'Improved' : stats.delta < 0 ? 'Declined' : 'Stable'} ({stats.delta > 0 ? '+' : ''}{stats.delta})
                                    </div>
                                </div>
                                
                                {/* Progress Bar */}
-                               <div className="h-2 bg-zinc-100 rounded-full overflow-hidden relative z-10">
+                               <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden relative z-10">
                                     <div className={`absolute top-0 bottom-0 left-0 rounded-full transition-all duration-1000 ${progressPercent >= 100 ? 'bg-teal-500' : 'bg-zinc-800'}`} style={{ width: `${progressPercent}%` }}></div>
                                </div>
                                
-                               <div className="flex justify-between mt-2 relative z-10">
+                               <div className="flex justify-between mt-1.5 relative z-10">
                                    <span className="text-[9px] font-bold text-zinc-400">Baseline: {stats.start}</span>
                                    {progressPercent >= 100 ? (
                                        <span className="text-[9px] font-bold text-teal-600 flex items-center gap-1"><Trophy size={10} /> Goal Met</span>
@@ -648,70 +775,42 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                </div>
           </section>
 
-          {/* EXPANDABLE HISTORY CHART */}
+          {/* SKIN HEALTH JOURNEY */}
           <section className="bg-white rounded-[2rem] border border-teal-50 shadow-sm overflow-hidden transition-all duration-500">
-              <div 
-                  className="p-6 cursor-pointer hover:bg-teal-50/30 transition-colors"
-                  onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
-              >
-                  <div className="flex justify-between items-center mb-4">
+              <div className="p-6">
+                  <div className="flex justify-between items-center mb-6">
                        <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest flex items-center gap-2">
                           <LineChart size={14} className="text-teal-500" /> Skin Health Journey
                       </h3>
-                      <div className={`w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 transition-transform duration-300 ${isHistoryExpanded ? 'rotate-180' : ''}`}>
-                          <ChevronDown size={16} />
-                      </div>
+                      {/* Optional summary info can go here */}
                   </div>
                   
-                  {/* RESTORED & UPGRADED: High-Res Canvas Chart */}
-                  {isHistoryExpanded && history.length > 1 && (
-                      <HistoryChart history={history} />
+                  {/* High-Res Canvas Chart (Always visible if data exists) */}
+                  {history.length > 1 && (
+                      <div className="mb-6">
+                           <HistoryChart history={history} />
+                      </div>
                   )}
 
-                  <div className="flex items-center justify-between text-[10px] font-medium text-zinc-400 pt-2">
-                      <span>Based on {history.length} scans</span>
-                      <span className="text-teal-600 font-bold flex items-center gap-1">
-                          {isHistoryExpanded ? 'Collapse' : 'View Full History'}
-                      </span>
-                  </div>
+                  <button 
+                      onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                      className="w-full py-3 bg-zinc-50 hover:bg-zinc-100 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-zinc-500 hover:text-zinc-700 transition-colors"
+                  >
+                      {isHistoryExpanded ? 'Hide Scan Logs' : 'View Scan Logs'}
+                      <ChevronDown size={14} className={`transition-transform duration-300 ${isHistoryExpanded ? 'rotate-180' : ''}`} />
+                  </button>
               </div>
 
               {/* EXPANDABLE LIST AREA */}
               {isHistoryExpanded && (
-                  <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 space-y-6 animate-in slide-in-from-top-4 duration-300">
+                  <div className="border-t border-zinc-100 bg-zinc-50/30 animate-in slide-in-from-top-4 duration-300">
                       {Object.entries(groupedHistory).map(([monthYear, scans]) => (
-                          <div key={monthYear}>
-                              <h4 className="text-[10px] font-black text-teal-900/40 uppercase tracking-widest mb-3 ml-1">{monthYear}</h4>
-                              <div className="space-y-3">
-                                  {scans.map((entry, i) => (
-                                      <button 
-                                          key={entry.timestamp} 
-                                          onClick={() => setSelectedScan(entry)}
-                                          className="w-full bg-white border border-zinc-100 hover:border-teal-200 hover:shadow-md p-4 rounded-2xl flex items-center justify-between shadow-sm transition-all duration-200 group text-left"
-                                      >
-                                          <div className="flex items-center gap-4">
-                                              {/* SCORE BOX */}
-                                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm transition-colors border ${entry.overallScore > 80 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : entry.overallScore < 60 ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                                  {entry.overallScore}
-                                              </div>
-                                              
-                                              {/* DATE & TIME TITLE */}
-                                              <div className="flex-1 min-w-0">
-                                                  <span className="block text-sm font-bold text-zinc-900 mb-0.5">
-                                                      {new Date(entry.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                  </span>
-                                                  <p className="text-[10px] font-medium text-zinc-400 truncate w-full group-hover:text-teal-600 transition-colors">
-                                                      Tap for full report
-                                                  </p>
-                                              </div>
-                                          </div>
-                                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-300 group-hover:bg-white group-hover:text-teal-500 transition-colors">
-                                              <ChevronRight size={16} />
-                                          </div>
-                                      </button>
-                                  ))}
-                              </div>
-                          </div>
+                          <MonthGroup 
+                             key={monthYear} 
+                             monthYear={monthYear} 
+                             scans={scans} 
+                             onSelect={setSelectedScan} 
+                          />
                       ))}
                   </div>
               )}
@@ -720,7 +819,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
           {/* DANGER ZONE */}
           <div className="mt-12 text-center pb-8">
                <button 
-                  onClick={onReset}
+                  onClick={() => setShowClearConfirm(true)}
                   className="inline-flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-widest hover:text-rose-600 transition-colors px-6 py-3 rounded-full hover:bg-rose-50"
                >
                    <Trash2 size={14} /> Clear Local Data
@@ -746,6 +845,37 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
              onSave={handleGoalsSave} 
              onClose={() => setIsGoalModalOpen(false)} 
           />
+      )}
+
+      {/* Clear Data Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in">
+             <div className="w-full max-w-sm bg-white rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 text-center">
+                 <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500">
+                     <AlertCircle size={32} />
+                 </div>
+                 <h3 className="text-xl font-black text-zinc-900 mb-2">Delete Everything?</h3>
+                 <p className="text-sm text-zinc-500 mb-6 leading-relaxed">This will permanently delete your scan history, products, and profile data. This cannot be undone.</p>
+                 
+                 <div className="flex flex-col gap-3">
+                     <button 
+                        onClick={() => {
+                            setShowClearConfirm(false);
+                            onReset();
+                        }}
+                        className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-900/10"
+                     >
+                         Yes, Delete Everything
+                     </button>
+                     <button 
+                        onClick={() => setShowClearConfirm(false)}
+                        className="w-full py-3 bg-zinc-100 text-zinc-600 font-bold rounded-xl hover:bg-zinc-200 transition-colors"
+                     >
+                         Cancel
+                     </button>
+                 </div>
+             </div>
+        </div>
       )}
     </div>
   );

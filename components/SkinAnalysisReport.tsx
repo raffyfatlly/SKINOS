@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
-import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck } from 'lucide-react';
+import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck, ChevronDown } from 'lucide-react';
 
 // --- SUB COMPONENTS ---
 
@@ -274,6 +274,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
   const [complexity, setComplexity] = useState<'BASIC' | 'ADVANCED'>(userProfile.preferences?.complexity === 'ADVANCED' ? 'ADVANCED' : 'BASIC');
   const [isStrategyDismissed, setIsStrategyDismissed] = useState(false);
   const [isPrescriptionRevealed, setIsPrescriptionRevealed] = useState(false);
+  const [isTreatmentExpanded, setIsTreatmentExpanded] = useState(false);
   
   const [isChartVisible, setIsChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -781,7 +782,8 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
 
   let verdictTagText = "";
   let verdictTagColor = "";
-  let verdictBodyText = renderVerdict(groupAnalysis.summaryText);
+  // Explicit type annotation to allow reassignment with different ReactNode types (array vs fragment)
+  let verdictBodyText: React.ReactNode = renderVerdict(groupAnalysis.summaryText);
 
   if (isAnonymous) {
       verdictTagText = "BASELINE SET";
@@ -1086,46 +1088,49 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                 )}
             </div>
 
-            {/* CLINICAL MENU SECTION */}
-            <div className="modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 bg-teal-50/20 border-teal-100/50">
-                 <div className="flex items-center justify-between mb-8">
+            {/* CLINICAL MENU SECTION (Renamed to Treatment for You) */}
+            <div className="modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 bg-teal-50/20 border-teal-100/50 cursor-pointer hover:bg-teal-50/30 transition-all active:scale-[0.99] group" onClick={() => setIsTreatmentExpanded(!isTreatmentExpanded)}>
+                 <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="text-xl font-black text-zinc-900 tracking-tight">Professional Menu</h3>
+                        <h3 className="text-xl font-black text-zinc-900 tracking-tight">Treatment for You</h3>
                         <p className="text-xs font-bold text-teal-600 uppercase tracking-widest mt-1">Based on {groupAnalysis.priorityCategory.toLowerCase()}</p>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
-                        <Syringe size={18} />
+                    <div className={`w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 transition-transform duration-300 ${isTreatmentExpanded ? 'rotate-180' : ''}`}>
+                         {isTreatmentExpanded ? <ChevronDown size={18} /> : <Syringe size={18} />}
                     </div>
                  </div>
 
-                 <div className="space-y-4 mb-6">
-                    {clinicalSuggestions.map((treatment, idx) => (
-                        <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-zinc-100 flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0 mt-1">
-                                {treatment.type === 'TREATMENT' ? <Zap size={16} className="text-zinc-600" /> : 
-                                 treatment.type === 'FACIAL' ? <Sparkles size={16} className="text-zinc-600" /> :
-                                 <Activity size={16} className="text-zinc-600" />}
-                            </div>
-                            <div className="flex-1">
-                                <div className="flex justify-between items-start mb-1">
-                                    <h4 className="font-bold text-sm text-zinc-900">{treatment.name}</h4>
-                                </div>
-                                <p className="text-xs text-zinc-500 font-medium mb-2 leading-relaxed">{treatment.benefit}</p>
-                                <div className="flex gap-3">
-                                    <span className="text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded">Downtime: {treatment.downtime}</span>
-                                    <span className="text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded">Type: {treatment.type}</span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                 </div>
+                 {!isTreatmentExpanded && (
+                    <div className="mt-6 flex justify-center animate-in fade-in duration-300">
+                        <span className="text-[10px] font-bold text-teal-500 uppercase tracking-widest bg-white/60 px-4 py-2 rounded-full flex items-center gap-2 group-hover:bg-white transition-colors shadow-sm">
+                            View Clinical Options <ChevronDown size={12} className="animate-bounce" />
+                        </span>
+                    </div>
+                 )}
 
-                 <button 
-                    onClick={() => onConsultAI(`What clinical treatments like ${clinicalSuggestions[0].name} do you recommend for my ${groupAnalysis.priorityCategory.toLowerCase()}?`)}
-                    className="w-full py-3 rounded-xl bg-teal-600 text-white font-bold text-xs uppercase tracking-widest shadow-md shadow-teal-600/10 hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
-                 >
-                    <MessageCircle size={16} /> Consult AI
-                 </button>
+                 {isTreatmentExpanded && (
+                     <div className="space-y-4 mt-8 animate-in slide-in-from-top-4 duration-500 cursor-default" onClick={(e) => e.stopPropagation()}>
+                        {clinicalSuggestions.map((treatment, idx) => (
+                            <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-zinc-100 flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0 mt-1">
+                                    {treatment.type === 'TREATMENT' ? <Zap size={16} className="text-zinc-600" /> : 
+                                     treatment.type === 'FACIAL' ? <Sparkles size={16} className="text-zinc-600" /> :
+                                     <Activity size={16} className="text-zinc-600" />}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <h4 className="font-bold text-sm text-zinc-900">{treatment.name}</h4>
+                                    </div>
+                                    <p className="text-xs text-zinc-500 font-medium mb-2 leading-relaxed">{treatment.benefit}</p>
+                                    <div className="flex gap-3">
+                                        <span className="text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded">Downtime: {treatment.downtime}</span>
+                                        <span className="text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded">Type: {treatment.type}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                     </div>
+                 )}
             </div>
         </div>
 
