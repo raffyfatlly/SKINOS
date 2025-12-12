@@ -241,10 +241,10 @@ export const analyzeFaceSkin = async (
         }) : "Not Available";
 
         const promptContext = `
-        You are a Dermatological Analysis AI designed for precision and consistency.
+        You are a Dermatological Analysis AI designed for precision, robustness, and context-awareness.
         
         INPUT DATA:
-        - Image: High-Resolution Face Scan.
+        - Image: Face Scan (Quality varies).
         - CV Estimate (Rough Guide Only): ${metricString}
         ${anchorContext}
         
@@ -252,25 +252,34 @@ export const analyzeFaceSkin = async (
         Grade the skin metrics (0-100). Higher is ALWAYS Better/Healthier.
         
         CRITICAL SCORING RULES:
-        - High Score (90-100) = EXCELLENT/CLEAR Skin. 
-        - Low Score (20-50) = POOR/SEVERE Issues.
+        - High Score (90-100) = EXCELLENT/CLEAR Skin (Glass Skin).
+        - Average Score (70-85) = Good skin with common issues.
+        - Low Score (20-60) = Visible/Severe Issues.
+        
+        DETECTION STRATEGY (CRITICAL):
+        1. BLEMISHES & TONE: 
+           - Actively look for *uneven skin tone*, redness, and *blemishes* (spots, acne). 
+           - Even if the image is low quality, look for *contrast irregularities* on the cheeks/forehead that indicate dark spots or inflammation.
+           - Be strict: If tone is blotchy or spots are visible, scores for 'Redness'/'Pigmentation'/'Acne' should NOT exceed 85.
+        
+        2. IMAGE CONTEXT (Lighting/Makeup/Camera):
+           - *Bad Lighting/Camera*: Distinguish between digital noise/shadows and actual skin texture. Look for macro-patterns. If details are blurred by camera quality, infer from the visible contours and color consistency.
+           - *Makeup*: If the skin looks unnaturally smooth or foundation-covered, look for *texture breakthrough* (bumps/pores showing through). CAP scores at 85 if makeup is detected masking issues. Do not give 100 to makeup-covered skin.
+           - *Lighting*: Ignore cast shadows. Analyze the illuminated areas for true skin tone.
+        
+        3. CV DATA USAGE:
+           - Use the provided CV Estimate as a baseline, but *override it* if visual evidence (even low quality) suggests otherwise (e.g., CV missed a red patch due to lighting).
         
         SPECIFIC METRIC SCALES:
-        - Acne: 100 = Glass Skin/No Blemishes. 60 = Mild Breakouts. 30 = Severe Acne.
-        - Wrinkles: 100 = Smooth/Baby Skin. 60 = Fine Lines. 30 = Deep Wrinkles.
-        - Redness: 100 = Even Tone. 60 = Rosacea/Inflammation.
-        
-        If the visual evidence shows "Minimal" or "Good" skin, the score MUST be above 80.
-        Do NOT blindly follow the CV Estimate if it contradicts the visual image (CV can be wrong due to lighting).
-        Trust your visual analysis of the image features first.
+        - Acne: 100 = Clear. 70 = Occasional bumps. 40 = Active breakout.
+        - Wrinkles: 100 = Smooth. 70 = Fine lines. 40 = Deep lines.
+        - Redness: 100 = Uniform. 60 = Blotchy/Inflamed.
         
         OUTPUT FORMAT: JSON.
         Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string).
         
         INSTRUCTION FOR SUMMARY:
-        Provide a professional clinical assessment (3-4 sentences). **Bold** the specific diagnosis, root cause, or most critical concern using asterisks like **this**. Do not summarize the scores, explain the *why*. Example: "Overall skin health is stable, but **congestion in the T-zone** indicates improper cleansing. Hydration levels are adequate, though **mild erythema on the cheeks** suggests sensitivity."
-        
-        Be consistent. If unsure about image quality, use Reference scores as a baseline only.
+        Provide a professional clinical assessment (3-4 sentences). **Bold** the specific diagnosis, root cause, or most critical concern. If image quality or makeup hinders analysis, mention it briefly as a caveat (e.g., "**Uneven tone detected**, though low light limits texture analysis.").
         `;
 
         const response = await ai.models.generateContent({
