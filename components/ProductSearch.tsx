@@ -1,7 +1,5 @@
-
-
 import React, { useState, useEffect } from 'react';
-import { Search, Loader, ChevronRight, AlertTriangle, X, ShoppingBag } from 'lucide-react';
+import { Search, Loader, ChevronRight, AlertTriangle, X, ShoppingBag, Globe, Database, ScanLine } from 'lucide-react';
 import { searchProducts, analyzeProductFromSearch, SearchResult } from '../services/geminiService';
 import { Product, UserProfile } from '../types';
 
@@ -16,26 +14,51 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [loadingText, setLoadingText] = useState("Analyzing Product...");
+  
+  // Loading Text States
+  const [searchStatus, setSearchStatus] = useState("Searching...");
+  const [analyzeStatus, setAnalyzeStatus] = useState("Analyzing Product...");
+  
   const [error, setError] = useState<string | null>(null);
 
-  // Cycle loading text during analysis
+  // Cycle loading text during SEARCH
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isSearching) {
+        const messages = [
+            "Connecting to Global Database...",
+            "Filtering for Availability...",
+            "Identifying Skincare Matches...",
+            "Verifying Brand Authenticity...",
+            "Finalizing Results..."
+        ];
+        let i = 0;
+        setSearchStatus(messages[0]);
+        interval = setInterval(() => {
+            i = (i + 1) % messages.length;
+            setSearchStatus(messages[i]);
+        }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [isSearching]);
+
+  // Cycle loading text during ANALYSIS
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isAnalyzing) {
         const messages = [
-            "Finding Ingredients...",
-            "Searching Watsons MY...",
-            "Checking Prices...",
+            "Extracting Ingredient List...",
+            "Checking Formulation Safety...",
             "Calculating Biometric Match...",
-            "Finalizing Report..."
+            "Cross-referencing Allergens...",
+            "Generating Clinical Verdict..."
         ];
         let i = 0;
-        setLoadingText(messages[0]);
+        setAnalyzeStatus(messages[0]);
         interval = setInterval(() => {
             i = (i + 1) % messages.length;
-            setLoadingText(messages[i]);
-        }, 3000);
+            setAnalyzeStatus(messages[i]);
+        }, 2500);
     }
     return () => clearInterval(interval);
   }, [isAnalyzing]);
@@ -68,7 +91,8 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
     setError(null);
     
     try {
-      const product = await analyzeProductFromSearch(item.name, userProfile.biometrics);
+      // Pass score if available to maintain consistency, though usually null for manual search
+      const product = await analyzeProductFromSearch(item.name, userProfile.biometrics, item.score);
       onProductFound(product);
     } catch (err) {
       console.error(err);
@@ -103,18 +127,21 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                 autoFocus
             />
         </form>
-        <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-3 pl-2">
-            Searching Watsons, Guardian & Sephora
+        <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-3 pl-2 flex items-center gap-2">
+            <Globe size={12} /> Searching Watsons, Guardian & Sephora
         </p>
       </div>
 
       {/* Results Area */}
       <div className="flex-1 overflow-y-auto p-6">
         {isSearching ? (
-             <div className="space-y-4 animate-pulse">
-                {[1,2,3].map(i => (
-                    <div key={i} className="h-20 bg-zinc-50 rounded-2xl"></div>
-                ))}
+             <div className="flex flex-col items-center justify-center pt-20 text-center animate-in fade-in duration-500">
+                <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center mb-6 relative">
+                    <div className="absolute inset-0 border-4 border-teal-500/20 rounded-full animate-ping"></div>
+                    <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <h3 className="text-lg font-black text-zinc-900 mb-2">Searching...</h3>
+                <p className="text-xs font-bold text-teal-600 uppercase tracking-widest animate-pulse">{searchStatus}</p>
              </div>
         ) : error ? (
              <div className="p-6 bg-rose-50 border border-rose-100 rounded-2xl flex flex-col items-center text-center">
@@ -152,10 +179,14 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
 
       {/* Analyzing Overlay */}
       {isAnalyzing && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-md z-20 flex flex-col items-center justify-center animate-in fade-in">
-              <div className="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-              <h3 className="text-xl font-black text-zinc-900 mb-2">{loadingText}</h3>
-              <p className="text-zinc-500 text-sm font-medium animate-pulse">Deep scanning official sources...</p>
+          <div className="absolute inset-0 bg-white/90 backdrop-blur-md z-20 flex flex-col items-center justify-center animate-in fade-in">
+              <div className="relative mb-8">
+                  <div className="w-20 h-20 border-4 border-zinc-100 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+                  <ScanLine size={24} className="absolute inset-0 m-auto text-teal-600 animate-pulse" />
+              </div>
+              <h3 className="text-xl font-black text-zinc-900 mb-2">{analyzeStatus}</h3>
+              <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Please Wait</p>
           </div>
       )}
     </div>

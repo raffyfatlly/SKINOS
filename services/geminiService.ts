@@ -1,6 +1,15 @@
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
+// --- EXPORTED TYPES ---
+
+export interface SearchResult {
+    name: string;
+    brand: string;
+    score?: number;
+    price?: number;
+}
+
 // --- CACHING SYSTEM FOR 100% CONSISTENCY ---
 // Map to store results of identical images: Hash -> SkinMetrics
 const ANALYSIS_CACHE = new Map<string, SkinMetrics>();
@@ -210,7 +219,6 @@ export const analyzeFaceSkin = async (
             timeDiffMinutes = (Date.now() - prevScan.timestamp) / 1000 / 60;
             
             // Only anchor if the last scan was recent (e.g., < 48 hours)
-            // If it's been months, skin changes, so we trust new scan more.
             if (timeDiffMinutes < 2880) { // 2 days
                 anchorContext = `
                 === CONSISTENCY ANCHOR (EXTREMELY IMPORTANT) ===
@@ -240,45 +248,37 @@ export const analyzeFaceSkin = async (
         }) : "Not Available";
 
         const promptContext = `
-        You are a Dermatological Analysis AI designed for accurate, evidence-based visual assessment.
+        You are an expert, observant Skincare Coach.
         
         INPUT DATA:
         - Image: Face Scan.
         - CV Estimate (Rough Guide): ${metricString}
         ${anchorContext}
         
-        TASK:
+        PART 1: NUMERICAL SCORING (STRICT CALIBRATION)
         Grade skin metrics (0-100). Higher is ALWAYS Better/Healthier.
+        You MUST adhere to these ranges based on visual severity:
         
-        VISUAL ANALYSIS RULES (ACCURACY IS PARAMOUNT):
-        1. **EVIDENCE-BASED DETECTION**: 
-           - Only penalize scores if you see **clear, visible evidence** of a condition (e.g., distinct redness, raised bumps, deep lines). 
-           - **Do not assume** acne or wrinkles exist in shadowed areas or if the image is low resolution. 
-           - If a specific area (e.g., forehead) looks smooth/clear, score it High (90-99). Do not hallucinate blemishes.
-        
-        2. **CONTEXT AWARENESS**:
-           - **Lighting/Shadows**: Distinguish between dark spots (pigmentation) and cast shadows (lighting). If unsure, assume it is lighting and do not penalize.
-           - **Camera Quality**: If the image is grainy or blurry, do not interpret noise as texture. Err on the side of a higher/healthier score unless a blemish is unmistakable.
-           - **Makeup**: If makeup is detected, look for "texture breakthrough" (bumps under foundation). If skin looks perfectly smooth due to makeup/filters, score high on 'Acne' but cap 'Texture' at 85 to reflect masking.
-        
-        3. **CONDITION DIFFERENTIATION**:
-           - **Active Acne**: Must show redness + inflammation.
-           - **Texture/Congestion**: Colorless bumps. 
-           - **Pigmentation**: Flat dark marks.
-           - Do not mark 'Active Acne' down for flat pigmentation marks or simple texture.
-        
-        SCORING SCALE:
-        - 95-100: Flawless / Glass Skin.
-        - 85-94: Excellent / Very Minor Issues.
-        - 70-84: Good / Common Texture or Mild Redness.
-        - 50-69: Visible Concerns (e.g., Active Breakout).
-        - <50: Severe.
-        
-        INSTRUCTION FOR SUMMARY:
-        Provide a factual assessment. **Bold** the specific diagnosis only if it is clearly visible. If the skin looks good, emphasize health (e.g., "**Skin barrier appears healthy** with minimal congestion."). Mention lighting/quality constraints if they impact confidence.
+        - **None / Clear / Glass Skin**: 90-100 (No visible issues).
+        - **Mild**: 75-89 (Small, minor imperfections, mostly clear).
+        - **Moderate**: 60-74 (Distinct breakouts, texture, or redness. Visible but manageable).
+          * NOTE: If you see a standard breakout, score it 65-70. Do not inflate to 80+.
+        - **Significant**: 45-59 (Prominent issues, requiring immediate attention).
+        - **Severe**: 1-44 (Inflamed, widespread, cystic, or deep scarring).
+
+        PART 2: VISUAL ANALYSIS & SUMMARY (SIMPLE, CLEAR & DETAILED)
+        - **Role**: You are a friendly, helpful Skincare Coach, not a medical textbook.
+        - **Language**: Use **simple, everyday language**. Avoid complex medical jargon.
+          * Instead of "erythema", say "redness".
+          * Instead of "comedones", say "clogged pores" or "bumps".
+          * Instead of "hyperpigmentation", say "dark spots" or "marks".
+        - **Detail**: Be very specific about **where** you see issues (e.g., "forehead", "cheeks", "jawline") and **what** they look like.
+        - **Tone**: Direct, honest, and easy to understand. Explain *what* you see and *why* it matters simply.
+        - **Bold** the most important finding.
+        - Example: "I see some **moderate redness and active breakouts on your cheeks**, likely due to clogged pores. Your forehead looks a bit shiny, suggesting some oiliness there."
         
         OUTPUT FORMAT: JSON.
-        Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string).
+        Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string), skinAge (int), observations (Map<string, string>).
         `;
 
         const response = await ai.models.generateContent({
@@ -309,7 +309,7 @@ export const analyzeFaceSkin = async (
                         hydration: { type: Type.INTEGER },
                         oiliness: { type: Type.INTEGER },
                         darkCircles: { type: Type.INTEGER },
-                        stabilityRating: { type: Type.INTEGER }, // New Field
+                        stabilityRating: { type: Type.INTEGER }, 
                         analysisSummary: { type: Type.STRING },
                         skinAge: { type: Type.INTEGER },
                         observations: { 
@@ -330,16 +330,13 @@ export const analyzeFaceSkin = async (
         if (!aiData.overallScore && !localMetrics) throw new Error("Invalid AI Response");
 
         // 4. POST-PROCESSING STABILIZATION
-        // If AI indicates high stability (same person/environment) OR scan was very recent (<5 mins), apply damping.
         const stabilityRating = aiData.stabilityRating || 0;
         const isRecent = timeDiffMinutes < 5;
         
-        // Calculate a stabilization factor (0.0 to 1.0)
-        // If recent and stable, factor is high (1.0). If old or unstable, factor is low.
         let stabilizationFactor = 0;
         if (prevScan) {
-             if (isRecent) stabilizationFactor = 0.9; // 90% Damping for rapid rescans
-             else if (stabilityRating > 80) stabilizationFactor = 0.6; // 60% Damping for same environment
+             if (isRecent) stabilizationFactor = 0.9; 
+             else if (stabilityRating > 80) stabilizationFactor = 0.6;
         }
 
         const stabilize = (newVal: number, key: keyof SkinMetrics) => {
@@ -387,7 +384,7 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
             - Hydration: ${userMetrics.hydration}
             - Oiliness: ${userMetrics.oiliness}
             - Acne Score: ${userMetrics.acneActive}
-            - Sensitivity/Redness: ${userMetrics.redness} (Lower is sensitive)
+            - Redness (Sensitivity Gauge): ${userMetrics.redness} (Note: < 50 is Sensitive, > 80 is Resilient. DO NOT use Overall Score for this.)
             
             TASKS:
             1. IDENTIFY: Scan the image to identify the Brand and Product Name.
@@ -440,132 +437,116 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
             id: Date.now().toString(),
             dateScanned: Date.now()
         };
-    }, getFallbackProduct(userMetrics), 30000); // Reduced timeout since no web search
+    }, getFallbackProduct(userMetrics), 45000); 
 };
 
-// --- SEARCH & ONLINE ANALYSIS (New Features) ---
+// --- SEARCH FUNCTIONS ---
 
-export interface SearchResult {
-    name: string;
-    brand: string;
-    url?: string;
-    rating?: number;
-    price?: number;
-    score?: number; // Pre-calculated suitability
-}
-
-// NEW: Personalized "Holy Grail" Finder for Background Search
-export const generatePersonalizedHolyGrails = async (user: UserProfile): Promise<Record<string, SearchResult>> => {
+export const searchProducts = async (query: string): Promise<SearchResult[]> => {
     return runWithRetry(async (ai) => {
-        const metrics = user.biometrics;
         const prompt = `
-        User Profile:
-        - Acne: ${metrics.acneActive}
-        - Redness: ${metrics.redness}
-        - Hydration: ${metrics.hydration}
-        - Oiliness: ${metrics.oiliness}
-        - Aging: ${metrics.wrinkleFine}
+        TASK: Act as a product search engine for skincare.
+        QUERY: "${query}"
         
-        TASK:
-        Identify the absolute "Holy Grail" (Best in Class) skincare product generally available in Malaysia/Global Markets for this specific user's skin concerns for EACH category.
-        Use your internal product knowledge base.
+        INSTRUCTIONS:
+        1. List up to 5 real skincare/cosmetic products that match the query.
+        2. Focus on popular, available brands.
+        3. Return strictly JSON.
 
-        CRITERIA:
-        - High Efficacy matches for the user's specific low metrics.
-        - Must be a real, popular product.
-        - Estimate price in MYR.
-        - Estimate a "Suitability Score" (1-99) for this user.
-
-        OUTPUT: Strict JSON Object Map.
-        {
-           "CLEANSER": { "name": "Name", "brand": "Brand", "price": 45, "score": 95 },
-           "MOISTURIZER": { "name": "Name", "brand": "Brand", "price": 60, "score": 98 },
-           "SPF": { "name": "Name", "brand": "Brand", "price": 50, "score": 92 },
-           "TREATMENT": { "name": "Name", "brand": "Brand", "price": 85, "score": 96 }
-        }
+        OUTPUT FORMAT:
+        [
+            { "name": "Full Product Name", "brand": "Brand Name" }
+        ]
         `;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-            config: {
-                responseMimeType: "application/json"
-            }
-        });
-
-        const text = response.text || "{}";
-        return parseJSONFromText(text) || {};
-    }, {}, 20000);
-}
-
-export const searchProducts = async (query: string): Promise<SearchResult[]> => {
-    return runWithRetry(async (ai) => {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Identify skincare products matching "${query}" using your internal database.
-            Return a STRICT JSON array of up to 5 real, existing products.
-            Format: [{ "name": "Exact Name", "brand": "Brand", "rating": 4.5 }]`,
-            config: {
-                // No tools - relies on training data
-            }
+            config: { responseMimeType: "application/json" }
         });
 
         const text = response.text || "[]";
-        let results = [];
-        try { results = parseJSONFromText(text) || []; } catch(e) { }
-        
-        if (Array.isArray(results)) {
-            return results.map((r: any) => ({
-                name: r.name || "Unknown Product",
-                brand: r.brand || "Unknown Brand",
-                rating: r.rating || 4.5
-            }));
-        }
-        return [];
-    }, [], 20000); // 20s timeout
+        const results = parseJSONFromText(text);
+        return Array.isArray(results) ? results : [];
+    }, [], 20000);
 };
 
-export const findBetterAlternatives = async (originalProductType: string, user: UserProfile): Promise<SearchResult[]> => {
-    return runWithRetry(async (ai) => {
-        const metrics = user.biometrics;
-        // Construct a specific query based on user skin needs
-        let skinType = "Normal";
-        if (metrics.oiliness < 40) skinType = "Oily";
-        else if (metrics.hydration < 40) skinType = "Dry";
-        else if (metrics.redness < 50) skinType = "Sensitive";
-
-        let concern = "";
-        if (metrics.acneActive < 60) concern = "acne";
-        else if (metrics.pigmentation < 60) concern = "dark spots";
-        else if (metrics.wrinkleFine < 60) concern = "anti-aging";
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Suggest 3 "Holy Grail" top-rated ${originalProductType} products specifically for ${skinType} skin ${concern ? `targeting ${concern}` : ''}.
-            Focus on popular, dermatologically backed brands.
-            Return STRICT JSON array: [{ "name": "Product Name", "brand": "Brand", "rating": 4.9 }]`,
-            config: {
-                // No tools
-            }
-        });
-
-        const text = response.text || "[]";
-        let results = [];
-        try { results = parseJSONFromText(text) || []; } catch(e) {}
+export const findBetterAlternatives = async (productType: string, user: UserProfile): Promise<SearchResult[]> => {
+     return runWithRetry(async (ai) => {
+        const prompt = `
+        User Profile:
+        - Skin Type: ${user.skinType}
+        - Concerns: Acne (${user.biometrics.acneActive}), Hydration (${user.biometrics.hydration}), Sensitivity (${user.biometrics.redness})
         
-        if (Array.isArray(results)) return results;
-        return [];
-    }, [], 25000); // 25s timeout
+        TASK: Recommend 3 "Holy Grail" products in the category "${productType}" that are BETTER suited for this user than an average product.
+        
+        CRITERIA:
+        - Must be highly rated real products.
+        - Must target the user's specific biometric weaknesses.
+        - Avoid irritants if sensitivity is high.
+
+        OUTPUT JSON:
+        [
+            { "name": "Product Name", "brand": "Brand", "score": 95, "price": 50 }
+        ]
+        `;
+        
+        const response = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt,
+             config: { responseMimeType: "application/json" }
+        });
+        
+        const text = response.text || "[]";
+        const results = parseJSONFromText(text);
+        return Array.isArray(results) ? results : [];
+    }, []);
 }
 
-export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics): Promise<Product> => {
+export const generatePersonalizedHolyGrails = async (user: UserProfile): Promise<Record<string, SearchResult>> => {
+    return runWithRetry(async (ai) => {
+         const prompt = `
+         Analyze this user biometric profile:
+         - Hydration: ${user.biometrics.hydration} (Low < 50, High > 80)
+         - Acne: ${user.biometrics.acneActive} (Low < 60 means active acne)
+         - Sensitivity/Redness: ${user.biometrics.redness} (Low < 50 is sensitive)
+         
+         TASK: Identify ONE "Holy Grail" (Best Possible Match) product for each of these categories:
+         1. CLEANSER
+         2. MOISTURIZER
+         3. SPF
+         4. TREATMENT (Serum/Active)
+         
+         OUTPUT JSON Map:
+         {
+            "CLEANSER": { "name": "...", "brand": "...", "score": 98, "price": 45 },
+            "MOISTURIZER": { ... },
+            "SPF": { ... },
+            "TREATMENT": { ... }
+         }
+         `;
+
+         const response = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt,
+             config: { responseMimeType: "application/json" }
+         });
+
+         const text = response.text || "{}";
+         return parseJSONFromText(text) || {};
+    }, {});
+}
+
+// Updated to accept an optional 'consistencyScore' to override or guide the suitability
+export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics, consistencyScore?: number): Promise<Product> => {
     return runWithRetry<Product>(async (ai) => {
         const prompt = `
         Product Name: "${productName}"
         User Metrics:
         - Hydration: ${userMetrics.hydration}
-        - Sensitivity: ${userMetrics.redness} (Lower is sensitive)
+        - Redness (Sensitivity Gauge): ${userMetrics.redness} (Note: < 50 is Sensitive, > 80 is Resilient. DO NOT use Overall Score for this.)
         - Acne: ${userMetrics.acneActive}
+        ${consistencyScore ? `- TARGET SCORE: ${consistencyScore} (The user was previously shown this score. Ensure analysis aligns close to this if ingredients support it.)` : ''}
         
         TASK:
         1. RECALL: Use your internal product database to find the likely FULL INGREDIENTS LIST (INCI) for "${productName}". 
@@ -597,7 +578,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                // No tools
+                // No tools - intentionally using internal knowledge for deep ingredient analysis
             }
         });
 
@@ -605,6 +586,13 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
         const data = parseJSONFromText(text);
 
         if (!data || !data.name) throw new Error("Analysis failed");
+
+        // Force consistency if provided
+        if (consistencyScore && Math.abs((data.suitabilityScore || 50) - consistencyScore) > 20) {
+             data.suitabilityScore = Math.round((data.suitabilityScore + consistencyScore) / 2);
+        } else if (consistencyScore) {
+             data.suitabilityScore = consistencyScore;
+        }
 
         return {
             id: Date.now().toString(),
@@ -618,36 +606,47 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
             benefits: data.benefits || [],
             dateScanned: Date.now()
         };
-    }, { ...getFallbackProduct(userMetrics, productName), suitabilityScore: 75 }, 25000); // 25s timeout, Fallback provided
+    }, { ...getFallbackProduct(userMetrics, productName), suitabilityScore: consistencyScore || 75 }, 45000); 
 };
+
+// --- CHAT FUNCTIONS ---
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
     const ai = getAI();
+    
+    const systemInstruction = `
+    You are SkinOS AI, an advanced dermatological assistant.
+    
+    USER PROFILE:
+    - Name: ${user.name}
+    - Age: ${user.age}
+    - Skin Type: ${user.skinType}
+    - Biometrics: Hydration ${user.biometrics.hydration}/100, Acne ${user.biometrics.acneActive}/100, Sensitivity ${user.biometrics.redness}/100.
+    
+    CURRENT SHELF:
+    ${shelf.map(p => `- ${p.name} (${p.type}): ${p.suitabilityScore}/100 match`).join('\n')}
+    
+    GUIDELINES:
+    1. Be concise, professional, but friendly.
+    2. Use the biometric data to explain WHY a product works or fails.
+    3. If asked about routine, suggest ordering based on the shelf items provided.
+    4. Provide specific ingredient advice.
+    `;
+
     return ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {
-            systemInstruction: `You are SkinOS AI, a professional dermatologist assistant.
-            
-            USER PROFILE:
-            - Name: ${user.name} (${user.age} yo)
-            - Skin Type: ${user.skinType}
-            - Concerns: ${JSON.stringify(user.biometrics)}
-            - Current Shelf: ${shelf.map(p => p.name).join(', ')}
-            
-            GOAL:
-            Provide short, actionable skincare advice. Focus on ingredients and routine optimization.
-            When recommending treatments, check the user's "Redness" score first. If < 60, suggest gentle options.
-            `
+            systemInstruction: systemInstruction,
         }
     });
 };
 
+// IMPORTANT: Re-implementing auditProduct to ensure redness is the ONLY sensitivity check
 export const auditProduct = (product: Product, user: UserProfile) => {
     const metrics = user.biometrics;
     let score = product.suitabilityScore;
     
     // 1. Start with risks identified by AI
-    // NEW: Assign 'CRITICAL' only if riskLevel is explicitly 'HIGH' or dangerous mismatch
     const warnings: { reason: string, severity: 'CAUTION' | 'CRITICAL' }[] = product.risks ? product.risks.map(r => ({ 
         reason: `${r.ingredient}: ${r.reason}`,
         severity: r.riskLevel === 'HIGH' ? 'CRITICAL' : 'CAUTION'
@@ -659,10 +658,15 @@ export const auditProduct = (product: Product, user: UserProfile) => {
         const hasFragrance = product.ingredients.some(i => i.toLowerCase().includes('fragrance') || i.toLowerCase().includes('parfum'));
         const hasAlcohol = product.ingredients.some(i => i.toLowerCase().includes('alcohol denat') || i.toLowerCase().includes('ethanol'));
         
-        if (metrics.redness < 60 && (hasFragrance || hasAlcohol)) {
+        // CRITICAL: Explicitly checking REDNESS metric for sensitivity. 
+        // DO NOT use overallScore here.
+        const isSensitive = metrics.redness < 60; // 60 is the threshold for 'Moderate' redness issues.
+        const isVerySensitive = metrics.redness < 30; // 30 is 'Significant' redness.
+
+        if (isSensitive && (hasFragrance || hasAlcohol)) {
+            // Check if AI missed this
             if (!warnings.some(w => w.reason.toLowerCase().includes('fragrance') || w.reason.toLowerCase().includes('alcohol'))) {
-                 // ONLY mark CRITICAL if skin is EXTREMELY sensitive (<30)
-                 const severity = metrics.redness < 30 ? 'CRITICAL' : 'CAUTION';
+                 const severity = isVerySensitive ? 'CRITICAL' : 'CAUTION';
                  warnings.push({ 
                      reason: severity === 'CRITICAL' ? "CRITICAL: Severe sensitivity trigger (Fragrance/Alcohol)." : "Contains potential irritants (Fragrance/Alcohol).", 
                      severity 
@@ -674,7 +678,6 @@ export const auditProduct = (product: Product, user: UserProfile) => {
         const isDrying = product.ingredients.some(i => ['clay', 'charcoal', 'salicylic acid', 'kaolin'].includes(i.toLowerCase()));
         if (metrics.hydration < 50 && isDrying && product.type !== 'CLEANSER') {
              if (!warnings.some(w => w.reason.toLowerCase().includes('drying'))) {
-                // Only critical if extremely dry (<30)
                 const severity = metrics.hydration < 30 ? 'CRITICAL' : 'CAUTION';
                 warnings.push({ 
                     reason: severity === 'CRITICAL' ? "CRITICAL: Will severely worsen dehydration." : "Ingredients may be too drying.", 
@@ -700,7 +703,7 @@ export const auditProduct = (product: Product, user: UserProfile) => {
         const topActives = ['Retinol', 'Vitamin C', 'Niacinamide', 'Ceramides', 'Hyaluronic Acid', 'Salicylic Acid'];
         const hasTopActive = product.ingredients.some(i => topActives.some(a => i.toLowerCase().includes(a.toLowerCase())));
         if (hasTopActive) {
-            score += 5; // Local boost for powerful ingredients
+            score += 5; 
         }
 
     } else {
@@ -713,21 +716,18 @@ export const auditProduct = (product: Product, user: UserProfile) => {
     // Apply penalties based on severity
     warnings.forEach(w => {
         if (w.severity === 'CRITICAL') {
-            finalScore -= 20; // Heavy penalty for critical issues
+            finalScore -= 20; 
         } else {
-            finalScore -= 4; // Light penalty for cautions
+            finalScore -= 4; 
         }
     });
     
     finalScore = Math.max(10, finalScore);
     
     // STRICT CAP FOR CRITICAL ISSUES:
-    // If there is a CRITICAL issue, score cannot exceed 40.
     if (warnings.some(w => w.severity === 'CRITICAL')) {
         finalScore = Math.min(40, finalScore);
     } else if (warnings.length > 0 && finalScore > 85) {
-        // STRICTER RULE: If there are ANY warnings, score cannot be > 85 (Good but flawed).
-        // 90+ is reserved for perfect products.
         finalScore = 85; 
     }
 
@@ -741,7 +741,7 @@ export const auditProduct = (product: Product, user: UserProfile) => {
     let analysisReason = "Average Fit";
     if (criticalWarning) analysisReason = "Critical Mismatch";
     else if (firstWarning) analysisReason = "Use with Caution";
-    else if (finalScore > 85) analysisReason = "Excellent Match"; // Changed threshold
+    else if (finalScore > 85) analysisReason = "Excellent Match"; 
     else if (finalScore > 75) analysisReason = "Good Match";
 
     return {
@@ -834,6 +834,7 @@ export const analyzeShelfHealth = (products: Product[], user: UserProfile) => {
     };
 };
 
+// ... (Other exports: analyzeProductContext, getBuyingDecision, getClinicalTreatmentSuggestions, etc.) ...
 export const analyzeProductContext = (product: Product, shelf: Product[]) => {
     const typeCount = shelf.filter(p => p.type === product.type).length;
     

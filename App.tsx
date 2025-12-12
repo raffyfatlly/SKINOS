@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, AppView, Product, SkinMetrics, SkinType } from './types';
 import FaceScanner from './components/FaceScanner';
@@ -14,7 +13,7 @@ import AIAssistant from './components/AIAssistant';
 import { getBuyingDecision, findBetterAlternatives, SearchResult, analyzeProductFromSearch, generatePersonalizedHolyGrails } from './services/geminiService';
 import { auth } from './services/firebase';
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
-import { LayoutGrid, ScanBarcode, User, Sparkles, HelpCircle, ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle as QuestionIcon, ThumbsUp, ArrowRightLeft, ThumbsDown, FlaskConical, ShoppingBag, X, Zap, WifiOff, Camera, Search, Globe, ChevronRight, CheckCircle2, Droplet, Sun, Layers, Brush, TrendingUp, PiggyBank, ArrowRight } from 'lucide-react';
+import { LayoutGrid, ScanBarcode, User, Sparkles, HelpCircle, ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle as QuestionIcon, ThumbsUp, ArrowRightLeft, ThumbsDown, FlaskConical, ShoppingBag, X, Zap, WifiOff, Camera, Search, Globe, ChevronRight, CheckCircle2, Droplet, Sun, Layers, Brush, TrendingUp, PiggyBank, ArrowRight, Loader } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 
 // --- VISUAL HIGHLIGHT COMPONENT ---
@@ -344,7 +343,8 @@ const App: React.FC = () => {
       setIsAnalyzingAlternative(true);
       try {
           // Analyze the selected alternative as a new product
-          const newProduct = await analyzeProductFromSearch(alt.name, user.biometrics);
+          // Pass the 'score' from the search result to maintain consistency in the rating
+          const newProduct = await analyzeProductFromSearch(alt.name, user.biometrics, alt.score);
           // Replace current view with the new product
           handleProductFound(newProduct);
       } catch (e) {
@@ -602,7 +602,8 @@ const App: React.FC = () => {
                             {enticement.type === 'UPGRADE' ? (
                                 <button 
                                     onClick={() => handleSelectAlternative(enticement.product)}
-                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-[1.5rem] p-5 shadow-lg shadow-indigo-200 text-left relative overflow-hidden group hover:scale-[1.01] transition-transform"
+                                    disabled={isAnalyzingAlternative}
+                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-[1.5rem] p-5 shadow-lg shadow-indigo-200 text-left relative overflow-hidden group hover:scale-[1.01] transition-transform disabled:opacity-80 disabled:cursor-not-allowed"
                                 >
                                     <div className="absolute top-0 right-0 p-3 opacity-20">
                                         <Sparkles size={64} className="text-white rotate-12" />
@@ -614,15 +615,26 @@ const App: React.FC = () => {
                                         </div>
                                         <h3 className="text-lg font-black leading-tight mb-0.5">{enticement.product.name}</h3>
                                         <p className="text-xs text-indigo-100 font-medium mb-3">{enticement.product.brand}</p>
-                                        <div className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest bg-white text-indigo-600 px-3 py-1.5 rounded-full">
-                                            View Upgrade <ArrowRight size={12} />
+                                        
+                                        <div className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest bg-white text-indigo-600 px-3 py-1.5 rounded-full">
+                                            {isAnalyzingAlternative ? (
+                                                <>
+                                                    <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                                    Analyzing Formula...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    View Upgrade <ArrowRight size={12} />
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </button>
                             ) : enticement.type === 'VALUE' ? (
                                 <button 
                                     onClick={() => handleSelectAlternative(enticement.product)}
-                                    className="w-full bg-emerald-50 border border-emerald-100 rounded-[1.5rem] p-5 text-left relative overflow-hidden group hover:border-emerald-200 transition-colors"
+                                    disabled={isAnalyzingAlternative}
+                                    className="w-full bg-emerald-50 border border-emerald-100 rounded-[1.5rem] p-5 text-left relative overflow-hidden group hover:border-emerald-200 transition-colors disabled:opacity-80"
                                 >
                                      <div className="flex justify-between items-start">
                                          <div>
@@ -636,6 +648,13 @@ const App: React.FC = () => {
                                             <p className="text-xs text-emerald-600 font-bold">
                                                 {enticement.product.name} (~RM {enticement.product.price})
                                             </p>
+                                            
+                                            {isAnalyzingAlternative && (
+                                                <div className="mt-2 inline-flex items-center gap-2 text-[10px] font-bold text-emerald-600">
+                                                    <div className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                                                    Analyzing...
+                                                </div>
+                                            )}
                                          </div>
                                          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-emerald-500 shadow-sm">
                                              <TrendingUp size={16} />
