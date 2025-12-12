@@ -250,32 +250,31 @@ export const analyzeFaceSkin = async (
         TASK:
         Grade skin metrics (0-100). Higher is ALWAYS Better/Healthier.
         
-        VISUAL ANALYSIS RULES (ACCURACY IS PARAMOUNT):
+        SCORING CALIBRATION (STRICT ENFORCEMENT):
+        - **None / Clear**: 90-100 (No visible issues, glass skin).
+        - **Mild**: 75-89 (Small, minor imperfections, mostly clear).
+        - **Moderate**: 60-74 (Distinct breakdown/texture/acne, but manageable).
+        - **Significant**: 45-59 (Prominent issues, requiring attention).
+        - **Severe**: 1-44 (Inflamed, widespread, cystic).
+
+        VISUAL ANALYSIS RULES:
         1. **EVIDENCE-BASED DETECTION**: 
-           - Only penalize scores if you see **clear, visible evidence** of a condition (e.g., distinct redness, raised bumps, deep lines). 
-           - **Do not assume** acne or wrinkles exist in shadowed areas or if the image is low resolution. 
-           - If a specific area (e.g., forehead) looks smooth/clear, score it High (90-99). Do not hallucinate blemishes.
+           - Look for **Moderate Breakouts** (visible spots/redness). If present, score MUST be between **60-70**. Do not give 80s for moderate acne.
+           - Look for **Significant** issues. If present, score MUST be **below 60**.
+           - Only penalize scores if you see **clear, visible evidence**.
+           - If a specific area (e.g., forehead) looks smooth/clear, score it High (90-99).
         
         2. **CONTEXT AWARENESS**:
-           - **Lighting/Shadows**: Distinguish between dark spots (pigmentation) and cast shadows (lighting). If unsure, assume it is lighting and do not penalize.
-           - **Camera Quality**: If the image is grainy or blurry, do not interpret noise as texture. Err on the side of a higher/healthier score unless a blemish is unmistakable.
-           - **Makeup**: If makeup is detected, look for "texture breakthrough" (bumps under foundation). If skin looks perfectly smooth due to makeup/filters, score high on 'Acne' but cap 'Texture' at 85 to reflect masking.
+           - **Lighting/Shadows**: Distinguish between dark spots (pigmentation) and cast shadows (lighting).
+           - **Camera Quality**: If the image is grainy, do not interpret noise as texture.
         
         3. **CONDITION DIFFERENTIATION**:
            - **Active Acne**: Must show redness + inflammation.
            - **Texture/Congestion**: Colorless bumps. 
            - **Pigmentation**: Flat dark marks.
-           - Do not mark 'Active Acne' down for flat pigmentation marks or simple texture.
-        
-        SCORING SCALE:
-        - 95-100: Flawless / Glass Skin.
-        - 85-94: Excellent / Very Minor Issues.
-        - 70-84: Good / Common Texture or Mild Redness.
-        - 50-69: Visible Concerns (e.g., Active Breakout).
-        - <50: Severe.
         
         INSTRUCTION FOR SUMMARY:
-        Provide a factual assessment. **Bold** the specific diagnosis only if it is clearly visible. If the skin looks good, emphasize health (e.g., "**Skin barrier appears healthy** with minimal congestion."). Mention lighting/quality constraints if they impact confidence.
+        Provide a factual assessment. **Bold** the specific diagnosis only if it is clearly visible. If the skin looks good, emphasize health.
         
         OUTPUT FORMAT: JSON.
         Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string).
@@ -391,18 +390,14 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
             
             TASKS:
             1. IDENTIFY: Scan the image to identify the Brand and Product Name.
-            2. INGREDIENTS: Attempt to read the ingredient list from the label.
-               - If the label is visible, transcribe ingredients.
-               - If the text is blurry or hidden, use your INTERNAL KNOWLEDGE BASE to recall the ingredients if this is a known/popular product.
-               - Do not hallucinate. If unknown, return empty ingredients array.
-            3. PRICE: Estimate retail price in MYR based on brand tier (e.g. Drugstore vs Luxury).
-            4. SCORING STRATEGY (IMPORTANT):
-               - BASE SCORE: Start at 85.
-               - BONUS: Add +5 points for EACH "Star Active" that specifically helps the user (e.g., Salicylic Acid for Acne, Ceramides for Dryness). Max Bonus +14 (Do not exceed 99 total).
-               - PENALTY: Deduct ONLY 3-5 points for minor risks (Fragrance/Alcohol). Do not over-penalize.
-               - If the product is a "Holy Grail" or widely recommended for this skin type, the final score should be HIGH (85-99).
-               - SCORE LIMITS: Nothing is perfect. Max Score = 99. Min Score = 1.
-               - Only give a low score (<60) if the product contains ingredients that are ACTIVELY HARMFUL or contraindicated for this user.
+            2. INGREDIENTS: Attempt to read the ingredient list from the label. Use knowledge base if blurry.
+            3. SCORING STRATEGY (STRICT & REALISTIC):
+               - **PHILOSOPHY**: 75 is Average/Decent. 85 is Great. 95+ is "Holy Grail" Perfection.
+               - **BASE SCORE**: Start at 75 (Solid, standard product).
+               - **BONUS**: +5 points per KEY active ingredient that matches user needs (max +20).
+               - **PENALTY**: -5 to -10 points for risks (Fragrance, Alcohol, Mismatch).
+               - **PERFECTION RULE**: Score > 90 is ONLY allowed if there are NO RISKS and MULTIPLE BENEFITS.
+               - **REALISM**: If it's a basic moisturizer with no special actives, score should be ~75-80.
             
             Return STRICT JSON:
             {
@@ -576,12 +571,12 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
            - Provide the most common formulation for this specific product name.
            - Estimate current price in MYR.
         
-        2. ANALYZE & SCORE:
-           - BASE SCORE: Start at 85 (Good baseline).
-           - BENEFIT BONUS: Add +5 to +10 points if it contains "Star Ingredients" perfectly matched to the user (e.g. Niacinamide for Oily skin).
-           - RISK PENALTY: Deduct ONLY 3-5 points for minor risks (e.g. Fragrance). 
-           - If the product addresses the user's main concern (e.g. Salicylic Acid for Acne user), the score should remain HIGH (>85) even with minor risks.
-           - Only use LOW SCORES (<60) for dangerous mismatches (e.g. Pore-clogging oil for severe acne).
+        2. SCORING STRATEGY (STRICT):
+           - **Base Score**: 75 (Average).
+           - **Perfect (95-99)**: Requires exact active matches AND zero risks.
+           - **Excellent (85-94)**: Strong actives, maybe 1 minor acceptable trade-off.
+           - **Good (75-84)**: Basic, safe, effective.
+           - Penalize heavily (-10) for known irritants if skin is sensitive.
            - LIMIT: Max Score 99. Min Score 1.
 
         3. OUTPUT: Strict JSON format.
@@ -729,8 +724,9 @@ export const auditProduct = (product: Product, user: UserProfile) => {
     // If there is a CRITICAL issue, score cannot exceed 40.
     if (warnings.some(w => w.severity === 'CRITICAL')) {
         finalScore = Math.min(40, finalScore);
-    } else if (warnings.length > 0 && finalScore >= 85) {
-        // If there are standard cautions, cap at 85 (Good but not Perfect)
+    } else if (warnings.length > 0 && finalScore > 85) {
+        // STRICTER RULE: If there are ANY warnings, score cannot be > 85 (Good but flawed).
+        // 90+ is reserved for perfect products.
         finalScore = 85; 
     }
 
@@ -744,7 +740,8 @@ export const auditProduct = (product: Product, user: UserProfile) => {
     let analysisReason = "Average Fit";
     if (criticalWarning) analysisReason = "Critical Mismatch";
     else if (firstWarning) analysisReason = "Use with Caution";
-    else if (finalScore > 80) analysisReason = "Great Match";
+    else if (finalScore > 85) analysisReason = "Excellent Match"; // Changed threshold
+    else if (finalScore > 75) analysisReason = "Good Match";
 
     return {
         adjustedScore: Math.round(finalScore),
@@ -791,7 +788,7 @@ export const analyzeShelfHealth = (products: Product[], user: UserProfile) => {
     // Updated to handle severity
     const riskyProducts: { name: string, reason: string, severity: 'CAUTION' | 'CRITICAL' }[] = [];
     products.forEach(p => {
-        const audit = auditProduct(p, userProfile);
+        const audit = auditProduct(p, user);
         if (audit.warnings.length > 0) {
             // Find the most severe warning
             const severe = audit.warnings.find(w => w.severity === 'CRITICAL') || audit.warnings[0];

@@ -1,4 +1,3 @@
-
 import { SkinMetrics } from '../types';
 
 /**
@@ -84,38 +83,6 @@ const rgbToLab = (r: number, g: number, b: number) => {
     };
 };
 
-const labToRgb = (L: number, a: number, b: number) => {
-    let y = (L + 16) / 116;
-    let x = a / 500 + y;
-    let z = y - b / 200;
-
-    const x3 = x * x * x;
-    const y3 = y * y * y;
-    const z3 = z * z * z;
-
-    x = (x3 > 0.008856) ? x3 : (x - 16/116) / 7.787;
-    y = (y3 > 0.008856) ? y3 : (y - 16/116) / 7.787;
-    z = (z3 > 0.008856) ? z3 : (z - 16/116) / 7.787;
-
-    x = x * 0.95047;
-    y = y * 1.00000;
-    z = z * 1.08883;
-
-    let r = x * 3.2406 + y * -1.5372 + z * -0.4986;
-    let g = x * -0.9689 + y * 1.8758 + z * 0.0415;
-    let bl = x * 0.0557 + y * -0.2040 + z * 1.0570;
-
-    r = (r > 0.0031308) ? (1.055 * Math.pow(r, 1/2.4) - 0.055) : 12.92 * r;
-    g = (g > 0.0031308) ? (1.055 * Math.pow(g, 1/2.4) - 0.055) : 12.92 * g;
-    bl = (bl > 0.0031308) ? (1.055 * Math.pow(bl, 1/2.4) - 0.055) : 12.92 * bl;
-
-    return {
-        r: Math.max(0, Math.min(255, Math.round(r * 255))),
-        g: Math.max(0, Math.min(255, Math.round(g * 255))),
-        b: Math.max(0, Math.min(255, Math.round(bl * 255)))
-    };
-};
-
 // --- ALGORITHMS ---
 
 // 1. ACNE: Redness + Local Darkening (Inflammation)
@@ -134,9 +101,7 @@ function calculateAcneScore(img: ImageData): number {
     }
     const avgA = count > 0 ? sumA / count : 128;
     
-    // Thresholds: Acne is significantly redder than average skin
-    // Relaxed threshold to reduce false positives from general skin flush
-    const rednessThreshold = avgA + 12; 
+    const rednessThreshold = avgA + 10; 
 
     for (let i = 0; i < data.length; i += 4) {
         const { a } = rgbToLab(data[i], data[i+1], data[i+2]);
@@ -145,11 +110,12 @@ function calculateAcneScore(img: ImageData): number {
         }
     }
 
-    // Density calculation
     const density = acnePixels / totalPixels;
-    // Mapping: 0% density = 100 score. 5% density used to be 50 score, now relaxed.
-    // New: 5% density = 100 - (0.05 * 800) = 60 score (still passing).
-    return Math.max(20, 100 - (density * 800));
+    // UPDATED: Multiplier reduced to 1200.
+    // 3% density (0.03) -> 100 - 36 = 64 (Moderate).
+    // 1% density (0.01) -> 100 - 12 = 88 (Mild).
+    // 5% density (0.05) -> 100 - 60 = 40 (Severe).
+    return Math.max(10, 100 - (density * 1200));
 }
 
 // 2. REDNESS: Global Inflammation (Erythema)
@@ -166,15 +132,12 @@ function calculateRednessScore(img: ImageData): number {
     
     const avgA = count > 0 ? sumA / count : 15;
     
-    // Healthy skin 'a' value is usually around 12-16.
-    // Rosacea/Inflamed skin is > 20.
-    // Adjusted start point to 14 to allow more natural warmth
     if (avgA <= 14) return 98;
-    const penalty = (avgA - 14) * 4.0; // Slightly reduced penalty
+    const penalty = (avgA - 14) * 4.0;
     return Math.max(20, 100 - penalty);
 }
 
-// 3. TEXTURE: Laplacian Variance (Roughness)
+// 3. TEXTURE: Laplacian Variance (Roughness/Pores)
 function calculateTextureScore(img: ImageData): number {
     const w = img.width;
     const h = img.height;
@@ -183,14 +146,9 @@ function calculateTextureScore(img: ImageData): number {
     let pixels = 0;
 
     // Laplacian Kernel (Edge Detection)
-    //  0  1  0
-    //  1 -4  1
-    //  0  1  0
-    
     for (let y = 1; y < h - 1; y += 2) {
         for (let x = 1; x < w - 1; x += 2) {
             const i = (y * w + x) * 4;
-            // Convert to grayscale roughly
             const c = (data[i] + data[i+1] + data[i+2]) / 3;
             
             const up = (data[((y-1)*w+x)*4] + data[((y-1)*w+x)*4+1] + data[((y-1)*w+x)*4+2])/3;
@@ -200,7 +158,6 @@ function calculateTextureScore(img: ImageData): number {
 
             const laplacian = Math.abs(up + down + left + right - (4 * c));
             
-            // Ignore very high laplacian (edges/hair) and very low (flat)
             if (laplacian > 5 && laplacian < 50) {
                 varianceSum += laplacian;
             }
@@ -209,8 +166,13 @@ function calculateTextureScore(img: ImageData): number {
     }
 
     const avgRoughness = pixels > 0 ? varianceSum / pixels : 0;
-    // Smooth skin avgRoughness ~ 2-3. Rough skin ~ 8-10.
-    return Math.max(20, 100 - (avgRoughness * 7));
+    
+    // UPDATED: Texture Scoring
+    // Avg 4.0 (Moderate) -> 100 - 30 = 70.
+    // Avg 2.0 (Smooth) -> 100 - 10 = 90.
+    const score = 100 - ((avgRoughness - 1.0) * 10);
+    
+    return Math.max(10, Math.min(99, score));
 }
 
 // 4. WRINKLES: Sobel Edge Detection (Horizontal)
@@ -220,16 +182,10 @@ function calculateWrinkleScore(img: ImageData): number {
     const data = img.data;
     let edgePixels = 0;
 
-    // Sobel Y Kernel (Detects Horizontal Lines - Wrinkles are usually horizontal on forehead)
-    // -1 -2 -1
-    //  0  0  0
-    //  1  2  1
-
     for (let y = 1; y < h - 1; y++) {
         for (let x = 1; x < w - 1; x++) {
             const idx = (y * w + x) * 4;
             
-            // Helper to get Luma
             const getL = (ox: number, oy: number) => {
                 const i = ((y + oy) * w + (x + ox)) * 4;
                 return 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
@@ -255,26 +211,20 @@ function calculateHydrationScore(img: ImageData): number {
     let glowPixels = 0;
     const total = img.data.length / 4;
     
-    // Healthy hydration creates "micro-specularity" (subtle glow), not oily shine.
-    // We look for pixels with high luminance but moderate saturation.
-    
     for (let i = 0; i < img.data.length; i += 4) {
         const r = img.data[i], g = img.data[i+1], b = img.data[i+2];
         const l = 0.299*r + 0.587*g + 0.114*b;
         
-        // Find saturation
         const max = Math.max(r, g, b);
         const min = Math.min(r, g, b);
         const sat = max === 0 ? 0 : (max - min) / max;
         
-        // Hydrated skin reflects light: High Luma (160-230), Low-Mid Saturation
         if (l > 150 && l < 240 && sat < 0.45 && sat > 0.1) {
             glowPixels++;
         }
     }
     
     const glowDensity = glowPixels / total;
-    // Ideal glow density is around 15-25%. Too low = dry. Too high = oily.
     const deviation = Math.abs(glowDensity - 0.20); 
     
     return Math.max(20, 100 - (deviation * 300));
@@ -291,76 +241,56 @@ function calculateDarkCircleScore(eyeImg: ImageData, cheekImg: ImageData): numbe
     const eyeL = getAvgLuma(eyeImg);
     const cheekL = getAvgLuma(cheekImg);
     
-    // In healthy skin, under-eye is slightly darker but not much.
-    // If diff > 15, it's noticeable.
     const diff = Math.max(0, cheekL - eyeL);
-    
     return Math.max(30, 100 - (diff * 2.5));
 }
 
 /**
  * PRE-PROCESSING PIPELINE
  * Normalizes image for AI consumption.
- * 1. Auto-Exposure (Brightness Norm)
- * 2. Contrast Stretching (HD Effect)
- * 3. Sharpening (Detail Enhancement)
  */
 export const preprocessForAI = (
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number
 ): string => {
-    // 1. Get raw pixel data
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
     const len = data.length;
 
-    // 2. Calculate Stats (Luma) for Auto-Exposure
     let sumLuma = 0;
-    // Sample every 16th pixel for speed
     for (let i = 0; i < len; i += 16) { 
         sumLuma += (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
     }
     const avgLuma = sumLuma / (len / 16);
     
-    // Target Luma ~128 (Balanced Mid-Tone)
-    // Calculate adjustment needed
     const exposureBias = 128 - avgLuma; 
-
-    // 3. Process Pixels (Brightness + Contrast)
-    // We apply a mild contrast curve to make features pop
-    const contrast = 1.15; // 15% contrast boost
+    const contrast = 1.15; 
     const intercept = 128 * (1 - contrast);
     
     for (let i = 0; i < len; i += 4) {
-        // Apply Brightness (Exposure Correction)
         let r = data[i] + exposureBias;
         let g = data[i+1] + exposureBias;
         let b = data[i+2] + exposureBias;
 
-        // Apply Contrast
         r = (r * contrast) + intercept;
         g = (g * contrast) + intercept;
         b = (b * contrast) + intercept;
 
-        // Clamp
         data[i] = Math.max(0, Math.min(255, r));
         data[i+1] = Math.max(0, Math.min(255, g));
         data[i+2] = Math.max(0, Math.min(255, b));
     }
 
-    // 4. Put back on a temp canvas
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = width;
     tempCanvas.height = height;
     const tempCtx = tempCanvas.getContext('2d');
     if (tempCtx) {
         tempCtx.putImageData(imageData, 0, 0);
-        // Note: We skip complex convolution sharpening in JS as it's too slow for high-res images.
-        // The contrast boost effectively sharpens visual edges for the AI.
     }
 
-    return tempCanvas.toDataURL('image/jpeg', 0.98); // Return High Quality JPEG
+    return tempCanvas.toDataURL('image/jpeg', 0.98); 
 };
 
 
@@ -369,14 +299,11 @@ export const applyMedicalProcessing = (
     width: number,
     height: number
 ) => {
-    // Basic contrast enhancement for visualization
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
     
     for (let i = 0; i < data.length; i += 4) {
-        // Boost red slightly for visual check
         data[i] = Math.min(255, data[i] * 1.05);
-        // Increase contrast
         for (let c = 0; c < 3; c++) {
             let val = data[i+c];
             val = ((val - 128) * 1.1) + 128;
@@ -401,13 +328,11 @@ export const applyClinicalOverlays = (
     ctx.lineWidth = 1; 
     const scanStep = 8; 
     
-    // Simple overlay loop to show analysis points
     for (let y = Math.floor(cy - faceHeight * 0.45); y < cy + faceHeight * 0.5; y += scanStep) {
         for (let x = Math.floor(cx - faceWidth * 0.45); x < cx + faceWidth * 0.45; x += scanStep) {
             const i = (y * width + x) * 4;
             if (data[i+3] === 0) continue;
             
-            // Check Redness
             const { a } = rgbToLab(data[i], data[i+1], data[i+2]);
             if (a > 20) {
                  ctx.fillStyle = 'rgba(255, 50, 50, 0.4)';
@@ -455,6 +380,34 @@ const getNormalizedROI = (ctx: CanvasRenderingContext2D, x: number, y: number, w
     return imgData; 
 };
 
+export const drawBiometricOverlay = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    metrics: SkinMetrics
+) => {
+    const { cx, cy, faceWidth, faceHeight } = detectFaceBounds(ctx, width, height);
+    if (faceWidth === 0) return;
+
+    ctx.strokeStyle = 'rgba(13, 148, 136, 0.4)'; // Teal
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 5]);
+    
+    // Draw Oval
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, faceWidth * 0.38, faceHeight * 0.42, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Draw T-Zone
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(cx - faceWidth * 0.25, cy - faceHeight * 0.3);
+    ctx.lineTo(cx + faceWidth * 0.25, cy - faceHeight * 0.3);
+    ctx.moveTo(cx, cy - faceHeight * 0.3);
+    ctx.lineTo(cx, cy + faceHeight * 0.15);
+    ctx.stroke();
+};
+
 export const analyzeSkinFrame = (
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -468,8 +421,7 @@ export const analyzeSkinFrame = (
   const cheekY = cy + faceHeight * 0.05;
   const eyeY = cy - faceHeight * 0.12;
   const noseY = cy + faceHeight * 0.1;
-  const jawY = cy + faceHeight * 0.45;
-
+  
   const foreheadData = getNormalizedROI(ctx, cx - roiSize, foreheadY, roiSize*2, roiSize*0.6);
   const leftCheekData = getNormalizedROI(ctx, cx - faceWidth * 0.28, cheekY, roiSize, roiSize);
   const rightCheekData = getNormalizedROI(ctx, cx + faceWidth * 0.08, cheekY, roiSize, roiSize);
@@ -492,64 +444,32 @@ export const analyzeSkinFrame = (
   // 4. Wrinkles (Forehead)
   const wrinkleScore = calculateWrinkleScore(foreheadData);
   
-  // 5. Hydration (Cheek Glow)
-  const hydrationScore = calculateHydrationScore(leftCheekData);
+  // 5. Hydration (Cheeks + Forehead)
+  const cheekGlow = calculateHydrationScore(leftCheekData);
+  const foreheadGlow = calculateHydrationScore(foreheadData);
+  const hydrationScore = (cheekGlow + foreheadGlow) / 2;
   
   // 6. Dark Circles
   const darkCircleScore = calculateDarkCircleScore(eyeData, leftCheekData);
 
-  // Derived Metrics (Approximations based on core cv)
-  const oilinessScore = Math.max(10, 100 - Math.abs(50 - (hydrationScore > 80 ? 20 : 50))); 
-  const poreScore = textureScore; // Highly correlated
-  const saggingScore = wrinkleScore; // Correlated
-
-  // --- UPDATED SCORING FORMULA ---
-  // Formula: (Blemish + Health + Aging) / 3
-  // Blemish: Acne, Pores
-  // Health: Redness, Texture, Hydration, Oiliness
-  // Aging: Wrinkles, Dark Circles, Sagging
-
-  const blemishGroup = (acneScore + poreScore) / 2;
-  const healthGroup = (rednessScore + textureScore + hydrationScore + oilinessScore) / 4;
-  const agingGroup = (wrinkleScore + darkCircleScore + saggingScore) / 3;
-
-  const overallScore = (blemishGroup + healthGroup + agingGroup) / 3;
+  // Calculate Overall (Weighted Average)
+  const overall = (acneScore * 0.25) + (textureScore * 0.15) + (wrinkleScore * 0.15) + (rednessScore * 0.15) + (hydrationScore * 0.15) + (darkCircleScore * 0.15);
 
   return {
-    overallScore: Math.round(overallScore), // Rounded but not capped/normalized
-    skinAge: 25, // Placeholder, AI will refine
+    overallScore: normalizeScore(overall),
     acneActive: normalizeScore(acneScore),
-    acneScars: normalizeScore(acneScore + 5), // Correlated
-    poreSize: normalizeScore(poreScore),
-    blackheads: normalizeScore(poreScore - 5),
+    acneScars: normalizeScore(acneScore + 5), 
+    poreSize: normalizeScore(textureScore - 5),
+    blackheads: normalizeScore(textureScore),
     wrinkleFine: normalizeScore(wrinkleScore),
-    wrinkleDeep: normalizeScore(wrinkleScore - 10),
-    pigmentation: normalizeScore(textureScore), // Correlated
+    wrinkleDeep: normalizeScore(wrinkleScore + 10),
+    sagging: normalizeScore(wrinkleScore + 5),
+    pigmentation: normalizeScore(acneScore + 10),
     redness: normalizeScore(rednessScore),
-    hydration: normalizeScore(hydrationScore),
-    oiliness: normalizeScore(oilinessScore),
-    darkCircles: normalizeScore(darkCircleScore),
-    sagging: normalizeScore(saggingScore),
     texture: normalizeScore(textureScore),
-    timestamp: Date.now(),
+    hydration: normalizeScore(hydrationScore),
+    oiliness: normalizeScore(100 - hydrationScore), // Inverse proxy
+    darkCircles: normalizeScore(darkCircleScore),
+    timestamp: Date.now()
   };
-};
-
-export const drawBiometricOverlay = (
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  metrics: SkinMetrics
-) => {
-  const { cx, cy, faceWidth } = detectFaceBounds(ctx, width, height);
-  const color = metrics.overallScore > 80 ? "16, 185, 129" : metrics.overallScore > 60 ? "245, 158, 11" : "244, 63, 94";
-  
-  ctx.strokeStyle = `rgba(${color}, 0.5)`; 
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, faceWidth * 0.6, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = `rgba(${color}, 0.1)`;
-  ctx.fillRect(cx - faceWidth * 0.6, cy, faceWidth * 1.2, 2);
 };
