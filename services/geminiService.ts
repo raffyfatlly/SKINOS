@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Product, SkinMetrics, UserProfile } from "../types";
 
@@ -94,7 +93,7 @@ async function runWithRetry<T>(
         ]);
     } catch (error) {
         console.error("AI Operation Failed:", error);
-        if (fallbackValue) return fallbackValue;
+        if (fallbackValue !== undefined) return fallbackValue;
         throw error;
     }
 }
@@ -119,9 +118,9 @@ const getFallbackSkinMetrics = (localMetrics?: SkinMetrics): SkinMetrics => {
     }
 };
 
-const getFallbackProduct = (userMetrics?: SkinMetrics): Product => ({
+const getFallbackProduct = (userMetrics?: SkinMetrics, overrideName?: string): Product => ({
     id: "fallback-" + Date.now(),
-    name: "Scanned Product (Offline)",
+    name: overrideName || "Scanned Product (Offline)",
     brand: "Unknown Brand",
     ingredients: ["Water", "Glycerin", "Dimethicone"],
     risks: [],
@@ -241,45 +240,45 @@ export const analyzeFaceSkin = async (
         }) : "Not Available";
 
         const promptContext = `
-        You are a Dermatological Analysis AI designed for precision, robustness, and context-awareness.
+        You are a Dermatological Analysis AI designed for accurate, evidence-based visual assessment.
         
         INPUT DATA:
-        - Image: Face Scan (Quality varies).
-        - CV Estimate (Rough Guide Only): ${metricString}
+        - Image: Face Scan.
+        - CV Estimate (Rough Guide): ${metricString}
         ${anchorContext}
         
         TASK:
-        Grade the skin metrics (0-100). Higher is ALWAYS Better/Healthier.
+        Grade skin metrics (0-100). Higher is ALWAYS Better/Healthier.
         
-        CRITICAL SCORING RULES:
-        - High Score (90-100) = EXCELLENT/CLEAR Skin (Glass Skin).
-        - Average Score (70-85) = Good skin with common issues.
-        - Low Score (20-60) = Visible/Severe Issues.
+        VISUAL ANALYSIS RULES (ACCURACY IS PARAMOUNT):
+        1. **EVIDENCE-BASED DETECTION**: 
+           - Only penalize scores if you see **clear, visible evidence** of a condition (e.g., distinct redness, raised bumps, deep lines). 
+           - **Do not assume** acne or wrinkles exist in shadowed areas or if the image is low resolution. 
+           - If a specific area (e.g., forehead) looks smooth/clear, score it High (90-99). Do not hallucinate blemishes.
         
-        DETECTION STRATEGY (CRITICAL):
-        1. BLEMISHES & TONE: 
-           - Actively look for *uneven skin tone*, redness, and *blemishes* (spots, acne). 
-           - Even if the image is low quality, look for *contrast irregularities* on the cheeks/forehead that indicate dark spots or inflammation.
-           - Be strict: If tone is blotchy or spots are visible, scores for 'Redness'/'Pigmentation'/'Acne' should NOT exceed 85.
+        2. **CONTEXT AWARENESS**:
+           - **Lighting/Shadows**: Distinguish between dark spots (pigmentation) and cast shadows (lighting). If unsure, assume it is lighting and do not penalize.
+           - **Camera Quality**: If the image is grainy or blurry, do not interpret noise as texture. Err on the side of a higher/healthier score unless a blemish is unmistakable.
+           - **Makeup**: If makeup is detected, look for "texture breakthrough" (bumps under foundation). If skin looks perfectly smooth due to makeup/filters, score high on 'Acne' but cap 'Texture' at 85 to reflect masking.
         
-        2. IMAGE CONTEXT (Lighting/Makeup/Camera):
-           - *Bad Lighting/Camera*: Distinguish between digital noise/shadows and actual skin texture. Look for macro-patterns. If details are blurred by camera quality, infer from the visible contours and color consistency.
-           - *Makeup*: If the skin looks unnaturally smooth or foundation-covered, look for *texture breakthrough* (bumps/pores showing through). CAP scores at 85 if makeup is detected masking issues. Do not give 100 to makeup-covered skin.
-           - *Lighting*: Ignore cast shadows. Analyze the illuminated areas for true skin tone.
+        3. **CONDITION DIFFERENTIATION**:
+           - **Active Acne**: Must show redness + inflammation.
+           - **Texture/Congestion**: Colorless bumps. 
+           - **Pigmentation**: Flat dark marks.
+           - Do not mark 'Active Acne' down for flat pigmentation marks or simple texture.
         
-        3. CV DATA USAGE:
-           - Use the provided CV Estimate as a baseline, but *override it* if visual evidence (even low quality) suggests otherwise (e.g., CV missed a red patch due to lighting).
+        SCORING SCALE:
+        - 95-100: Flawless / Glass Skin.
+        - 85-94: Excellent / Very Minor Issues.
+        - 70-84: Good / Common Texture or Mild Redness.
+        - 50-69: Visible Concerns (e.g., Active Breakout).
+        - <50: Severe.
         
-        SPECIFIC METRIC SCALES:
-        - Acne: 100 = Clear. 70 = Occasional bumps. 40 = Active breakout.
-        - Wrinkles: 100 = Smooth. 70 = Fine lines. 40 = Deep lines.
-        - Redness: 100 = Uniform. 60 = Blotchy/Inflamed.
+        INSTRUCTION FOR SUMMARY:
+        Provide a factual assessment. **Bold** the specific diagnosis only if it is clearly visible. If the skin looks good, emphasize health (e.g., "**Skin barrier appears healthy** with minimal congestion."). Mention lighting/quality constraints if they impact confidence.
         
         OUTPUT FORMAT: JSON.
         Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string).
-        
-        INSTRUCTION FOR SUMMARY:
-        Provide a professional clinical assessment (3-4 sentences). **Bold** the specific diagnosis, root cause, or most critical concern. If image quality or makeup hinders analysis, mention it briefly as a caveat (e.g., "**Uneven tone detected**, though low light limits texture analysis.").
         `;
 
         const response = await ai.models.generateContent({
@@ -399,9 +398,10 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
             3. PRICE: Estimate retail price in MYR based on brand tier (e.g. Drugstore vs Luxury).
             4. SCORING STRATEGY (IMPORTANT):
                - BASE SCORE: Start at 85.
-               - BONUS: Add +5 points for EACH "Star Active" that specifically helps the user (e.g., Salicylic Acid for Acne, Ceramides for Dryness). Max Bonus +20.
+               - BONUS: Add +5 points for EACH "Star Active" that specifically helps the user (e.g., Salicylic Acid for Acne, Ceramides for Dryness). Max Bonus +14 (Do not exceed 99 total).
                - PENALTY: Deduct ONLY 3-5 points for minor risks (Fragrance/Alcohol). Do not over-penalize.
                - If the product is a "Holy Grail" or widely recommended for this skin type, the final score should be HIGH (85-99).
+               - SCORE LIMITS: Nothing is perfect. Max Score = 99. Min Score = 1.
                - Only give a low score (<60) if the product contains ingredients that are ACTIVELY HARMFUL or contraindicated for this user.
             
             Return STRICT JSON:
@@ -411,7 +411,7 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
                 "type": "CLEANSER" | "TONER" | "SERUM" | "MOISTURIZER" | "SPF" | "TREATMENT" | "FOUNDATION" | "OTHER",
                 "ingredients": ["Water", "Glycerin", ...], 
                 "estimatedPrice": Number,
-                "suitabilityScore": Number (0-100),
+                "suitabilityScore": Number (1-99),
                 "risks": [{ "ingredient": "Name", "riskLevel": "HIGH", "reason": "Why" }],
                 "benefits": [{ "ingredient": "Name", "target": "Metric", "description": "Why" }]
             }
@@ -478,7 +478,7 @@ export const generatePersonalizedHolyGrails = async (user: UserProfile): Promise
         - High Efficacy matches for the user's specific low metrics.
         - Must be a real, popular product.
         - Estimate price in MYR.
-        - Estimate a "Suitability Score" (0-100) for this user.
+        - Estimate a "Suitability Score" (1-99) for this user.
 
         OUTPUT: Strict JSON Object Map.
         {
@@ -563,7 +563,7 @@ export const findBetterAlternatives = async (originalProductType: string, user: 
 }
 
 export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics): Promise<Product> => {
-    return runWithRetry(async (ai) => {
+    return runWithRetry<Product>(async (ai) => {
         const prompt = `
         Product Name: "${productName}"
         User Metrics:
@@ -582,6 +582,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
            - RISK PENALTY: Deduct ONLY 3-5 points for minor risks (e.g. Fragrance). 
            - If the product addresses the user's main concern (e.g. Salicylic Acid for Acne user), the score should remain HIGH (>85) even with minor risks.
            - Only use LOW SCORES (<60) for dangerous mismatches (e.g. Pore-clogging oil for severe acne).
+           - LIMIT: Max Score 99. Min Score 1.
 
         3. OUTPUT: Strict JSON format.
         {
@@ -621,7 +622,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
             benefits: data.benefits || [],
             dateScanned: Date.now()
         };
-    }, undefined, 25000); // 25s timeout
+    }, { ...getFallbackProduct(userMetrics, productName), suitabilityScore: 75 }, 25000); // 25s timeout, Fallback provided
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
@@ -733,6 +734,9 @@ export const auditProduct = (product: Product, user: UserProfile) => {
         finalScore = 85; 
     }
 
+    // STRICT 1-99 CLAMPING (NOTHING IS PERFECT, NOTHING IS ZERO)
+    finalScore = Math.min(99, Math.max(1, finalScore));
+
     // Determine the primary reason text
     const criticalWarning = warnings.find(w => w.severity === 'CRITICAL');
     const firstWarning = warnings[0];
@@ -787,7 +791,7 @@ export const analyzeShelfHealth = (products: Product[], user: UserProfile) => {
     // Updated to handle severity
     const riskyProducts: { name: string, reason: string, severity: 'CAUTION' | 'CRITICAL' }[] = [];
     products.forEach(p => {
-        const audit = auditProduct(p, user);
+        const audit = auditProduct(p, userProfile);
         if (audit.warnings.length > 0) {
             // Find the most severe warning
             const severe = audit.warnings.find(w => w.severity === 'CRITICAL') || audit.warnings[0];
