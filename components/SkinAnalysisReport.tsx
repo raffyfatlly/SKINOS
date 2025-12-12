@@ -327,7 +327,8 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       const healthScore = (metrics.hydration + metrics.oiliness + metrics.redness + metrics.texture) / 4;
       const agingScore = (metrics.pigmentation + metrics.darkCircles + metrics.wrinkleFine + metrics.wrinkleDeep + metrics.sagging) / 5;
 
-      const scores = [{ name: 'Blemishes', val: blemishScore }, { name: 'Skin Health', val: healthScore }, { name: 'Aging Signs', val: agingScore }].sort((a,b) => a.val - b.val);
+      // Changed "Aging Signs" to "Vitality"
+      const scores = [{ name: 'Blemishes', val: blemishScore }, { name: 'Skin Health', val: healthScore }, { name: 'Vitality', val: agingScore }].sort((a,b) => a.val - b.val);
       const lowestGroup = scores[0];
 
       let summary = "";
@@ -932,7 +933,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                      <text x="94" y="78" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#A1A1AA" letterSpacing="0.2">TEXTURE</text>
                      <text x="60" y="98" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#A1A1AA" letterSpacing="0.2">OIL</text>
                      <text x="26" y="78" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#A1A1AA" letterSpacing="0.2">HYDRA</text>
-                     <text x="26" y="42" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#A1A1AA" letterSpacing="0.2">AGING</text>
+                     <text x="26" y="42" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#A1A1AA" letterSpacing="0.2">VITALITY</text>
                  </svg>
              </div>
         </div>
@@ -952,7 +953,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                  <MetricRing label="Texture" value={metrics.texture} metricKey="texture" onSelect={setSelectedMetric} />
              </GroupSection>
 
-             <GroupSection title="Aging" score={groupAnalysis.agingScore} delayClass="delay-500">
+             <GroupSection title="Vitality" score={groupAnalysis.agingScore} delayClass="delay-500">
                  <MetricRing label="Fine Lines" value={metrics.wrinkleFine} metricKey="wrinkleFine" onSelect={setSelectedMetric} />
                  <MetricRing label="Wrinkles" value={metrics.wrinkleDeep} metricKey="wrinkleDeep" onSelect={setSelectedMetric} />
                  <MetricRing label="Firmness" value={metrics.sagging} metricKey="sagging" onSelect={setSelectedMetric} />

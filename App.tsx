@@ -103,18 +103,6 @@ const App: React.FC = () => {
 
       persistState(updatedUser, shelf);
       setCurrentView(AppView.DASHBOARD);
-
-      if (updatedUser.isAnonymous) {
-          setTimeout(() => {
-              setNotification({
-                  type: 'SAVE_PROFILE',
-                  title: 'Save Your Results',
-                  desc: 'Create an account to track your skin progress.',
-                  action: 'Save',
-                  onAction: () => setShowSaveModal(true)
-              });
-          }, 4000);
-      }
   };
 
   const handleProductFound = (product: Product) => {
