@@ -11,6 +11,7 @@ import { auth } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 // Components
+import LandingPage from './components/LandingPage';
 import Onboarding from './components/Onboarding';
 import FaceScanner from './components/FaceScanner';
 import SkinAnalysisReport from './components/SkinAnalysisReport';
@@ -27,7 +28,8 @@ import { ScanFace, LayoutGrid, User, Search, Home } from 'lucide-react';
 
 const App: React.FC = () => {
   // --- STATE ---
-  const [currentView, setCurrentView] = useState<AppView>(AppView.ONBOARDING);
+  // Default to LANDING unless loaded data says otherwise
+  const [currentView, setCurrentView] = useState<AppView>(AppView.LANDING);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [shelf, setShelf] = useState<Product[]>([]);
   
@@ -50,7 +52,8 @@ const App: React.FC = () => {
             setCurrentView(AppView.FACE_SCANNER);
         }
       } else {
-        setCurrentView(AppView.ONBOARDING);
+        // No user data found -> Show Landing Page
+        setCurrentView(AppView.LANDING);
       }
     };
     init();
@@ -62,6 +65,10 @@ const App: React.FC = () => {
             if (data.user) {
                 setUserProfile(data.user);
                 setShelf(data.shelf);
+                // If we were on landing/onboarding, go to dashboard
+                if (currentView === AppView.LANDING || currentView === AppView.ONBOARDING) {
+                    setCurrentView(data.user.hasScannedFace ? AppView.DASHBOARD : AppView.FACE_SCANNER);
+                }
             }
         }
     }) : () => {};
@@ -132,12 +139,12 @@ const App: React.FC = () => {
       clearLocalData();
       setUserProfile(null);
       setShelf([]);
-      setCurrentView(AppView.ONBOARDING);
+      setCurrentView(AppView.LANDING);
   }
 
   // --- RENDER HELPERS ---
   const renderNavBar = () => {
-      if ([AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH].includes(currentView)) return null;
+      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH].includes(currentView)) return null;
 
       const navItemClass = (view: AppView) => 
         `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 ${currentView === view ? 'text-teal-600 bg-teal-50 scale-105' : 'text-zinc-400 hover:text-zinc-600'}`;
@@ -182,12 +189,15 @@ const App: React.FC = () => {
   };
 
   const renderView = () => {
-      // Fallback for corrupted state
-      if (!userProfile && currentView !== AppView.ONBOARDING) {
-          return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => setShowSaveModal(true)} />;
+      // Fallback for corrupted state (if user is null but we are deep in app)
+      if (!userProfile && ![AppView.LANDING, AppView.ONBOARDING].includes(currentView)) {
+          return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => setShowSaveModal(true)} />;
       }
 
       switch (currentView) {
+          case AppView.LANDING:
+              return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => setShowSaveModal(true)} />;
+
           case AppView.ONBOARDING:
               return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => setShowSaveModal(true)} />;
           
@@ -278,7 +288,11 @@ const App: React.FC = () => {
                 mode={userProfile?.isAnonymous ? 'SAVE' : 'LOGIN'}
                 onClose={() => setShowSaveModal(false)}
                 onSave={() => {}}
-                onMockLogin={() => setShowSaveModal(false)}
+                onMockLogin={() => {
+                    // For mock login on landing page
+                    setShowSaveModal(false);
+                    if (!userProfile) setCurrentView(AppView.ONBOARDING); 
+                }}
             />
         )}
 

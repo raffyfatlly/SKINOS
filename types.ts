@@ -97,6 +97,7 @@ export interface ShelfConflict {
 }
 
 export enum AppView {
+  LANDING = 'LANDING',
   ONBOARDING = 'ONBOARDING',
   DASHBOARD = 'DASHBOARD',
   FACE_SCANNER = 'FACE_SCANNER',
