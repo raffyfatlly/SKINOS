@@ -260,9 +260,10 @@ interface SkinAnalysisReportProps {
   onRescan: () => void;
   onConsultAI: (query: string) => void;
   onViewProgress?: () => void;
+  onLoginRequired: () => void;
 }
 
-const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, shelf, onRescan, onConsultAI, onViewProgress }) => {
+const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, shelf, onRescan, onConsultAI, onViewProgress, onLoginRequired }) => {
   const metrics = userProfile.biometrics;
   const history = userProfile.scanHistory || [];
   const prevMetrics = history.length > 1 ? history[history.length - 2] : null;
@@ -812,6 +813,15 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
        }
   }
 
+  const handleRescan = () => {
+      // Check if user is anonymous before allowing rescan
+      if (userProfile.isAnonymous) {
+          onLoginRequired();
+      } else {
+          onRescan();
+      }
+  };
+
   return (
     <div className="space-y-12 pb-32">
         {/* PROGRESS TRACKER OVERLAY ON HERO */}
@@ -824,8 +834,9 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                  )}
                  <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
                  
-                 <button onClick={onRescan} className="absolute top-6 right-6 z-20 bg-black/40 backdrop-blur-md text-white px-5 py-2.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest hover:bg-black/60 transition-colors border border-white/10 shadow-lg">
-                    <RefreshCw size={12} /> Rescan
+                 <button onClick={handleRescan} className="absolute top-6 right-6 z-20 bg-black/40 backdrop-blur-md text-white px-5 py-2.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest hover:bg-black/60 transition-colors border border-white/10 shadow-lg">
+                    {userProfile.isAnonymous ? <Sparkles size={12} /> : <RefreshCw size={12} />}
+                    {userProfile.isAnonymous ? "Save to Rescan" : "Rescan"}
                  </button>
 
                  {/* DYNAMIC PROGRESS VERDICT UI */}
