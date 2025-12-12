@@ -155,30 +155,39 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                     <CheckCircle2 size={14} className="text-teal-500" /> Optimization Plan
                </h3>
                
-               {/* 1. DISCONTINUE / REPLACE */}
-               {analysis.riskyProducts.map((item, i) => (
-                   <div key={`risk-${i}`} className="flex items-start gap-4 p-4 rounded-[1.5rem] bg-rose-50 border border-rose-100 relative overflow-hidden group">
-                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-400"></div>
-                       <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 border border-rose-100 text-rose-500 shadow-sm">
-                           <Ban size={18} />
+               {/* 1. DISCONTINUE / REPLACE / CAUTION */}
+               {analysis.riskyProducts.map((item, i) => {
+                   const isCritical = item.severity === 'CRITICAL';
+                   const colorClass = isCritical ? 'bg-rose-50 border-rose-100 text-rose-500' : 'bg-amber-50 border-amber-100 text-amber-500';
+                   const textClass = isCritical ? 'text-rose-800' : 'text-amber-800';
+                   const barClass = isCritical ? 'bg-rose-400' : 'bg-amber-400';
+                   const descClass = isCritical ? 'text-rose-700' : 'text-amber-700';
+                   const title = isCritical ? 'Issue Detected' : 'Caution';
+
+                   return (
+                       <div key={`risk-${i}`} className={`flex items-start gap-4 p-4 rounded-[1.5rem] border relative overflow-hidden group ${colorClass}`}>
+                           <div className={`absolute left-0 top-0 bottom-0 w-1 ${barClass}`}></div>
+                           <div className={`w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 border ${isCritical ? 'border-rose-100 text-rose-500' : 'border-amber-100 text-amber-500'} shadow-sm`}>
+                               {isCritical ? <Ban size={18} /> : <AlertTriangle size={18} />}
+                           </div>
+                           <div className="flex-1">
+                               <h4 className={`text-xs font-black uppercase tracking-wide mb-1 ${textClass}`}>{title}: {item.name}</h4>
+                               <p className={`text-xs font-medium leading-relaxed mb-2 ${descClass}`}>
+                                   {item.reason}
+                               </p>
+                               <button 
+                                    onClick={() => {
+                                        const p = products.find(prod => prod.name === item.name);
+                                        if (p) { setSelectedProduct(p); }
+                                    }}
+                                    className={`text-[10px] font-bold uppercase tracking-widest bg-white px-3 py-1.5 rounded-lg border transition-colors ${isCritical ? 'text-rose-600 border-rose-200 hover:bg-rose-100' : 'text-amber-600 border-amber-200 hover:bg-amber-100'}`}
+                               >
+                                   View Product
+                               </button>
+                           </div>
                        </div>
-                       <div className="flex-1">
-                           <h4 className="text-xs font-black uppercase tracking-wide text-rose-800 mb-1">Issue: {item.name}</h4>
-                           <p className="text-xs text-rose-700 font-medium leading-relaxed mb-2">
-                               {item.reason}
-                           </p>
-                           <button 
-                                onClick={() => {
-                                    const p = products.find(prod => prod.name === item.name);
-                                    if (p) { setSelectedProduct(p); }
-                                }}
-                                className="text-[10px] font-bold uppercase tracking-widest text-rose-600 bg-white px-3 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-100 transition-colors"
-                           >
-                               View Product
-                           </button>
-                       </div>
-                   </div>
-               ))}
+                   )
+               })}
 
                {/* 2. UPGRADES (Replaces missing/bad items) */}
                {analysis.upgrades.map((upgrade, i) => (
@@ -418,10 +427,12 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
            {filteredProducts.map((p) => {
                const audit = auditProduct(p, userProfile);
                const warning = audit.warnings.length > 0;
+               const critical = audit.warnings.some(w => w.severity === 'CRITICAL');
+               const caution = audit.warnings.some(w => w.severity === 'CAUTION') && !critical;
+               
                const score = Number(audit.adjustedScore);
                // New logic: Only consider it "Low Score" if below 50. 50-70 is passable.
                const isLowScore = score < 50; 
-               const isCaution = warning && score >= 50; // Good score but has warnings
                
                const isConflict = shelfIQ.analysis.conflicts.some(c => c.toLowerCase().includes(p.ingredients[0]?.toLowerCase()) || p.ingredients.some(i => c.toLowerCase().includes(i.toLowerCase())));
 
@@ -431,7 +442,7 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                         onClick={() => setSelectedProduct(p)}
                         className="modern-card rounded-[2rem] p-5 text-left relative group flex flex-col items-start min-h-[180px] hover:border-teal-100 transition-colors"
                    >
-                        <div className={`absolute top-5 right-5 w-2 h-2 rounded-full ${isCaution ? 'bg-amber-500' : warning ? 'bg-rose-500' : isLowScore ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+                        <div className={`absolute top-5 right-5 w-2 h-2 rounded-full ${caution ? 'bg-amber-500' : critical ? 'bg-rose-500' : isLowScore ? 'bg-rose-400' : 'bg-emerald-400'}`} />
 
                         <div className={`w-14 h-14 rounded-2xl ${getProductColor(p.type)} flex items-center justify-center mb-5`}>
                             {getProductIcon(p.type)}
@@ -446,23 +457,21 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                         </div>
 
                         <div className={`inline-flex items-center px-2.5 py-1.5 rounded-lg text-[10px] font-bold tracking-wide ${
-                            isCaution ? 'bg-amber-50 text-amber-700' :
-                            warning ? 'bg-rose-50 text-rose-700' : 
+                            caution ? 'bg-amber-50 text-amber-700' :
+                            critical ? 'bg-rose-50 text-rose-700' : 
                             isLowScore ? 'bg-rose-50 text-rose-700' :
                             'bg-emerald-50 text-emerald-700'
                         }`}>
-                            {warning ? (
-                                isCaution ? (
-                                    <>
-                                        <AlertTriangle size={12} className="mr-1.5" />
-                                        CAUTION
-                                    </>
-                                ) : (
-                                    <>
-                                        <AlertTriangle size={12} className="mr-1.5" />
-                                        AVOID
-                                    </>
-                                )
+                            {caution ? (
+                                <>
+                                    <AlertTriangle size={12} className="mr-1.5" />
+                                    CAUTION
+                                </>
+                            ) : critical ? (
+                                <>
+                                    <Ban size={12} className="mr-1.5" />
+                                    AVOID
+                                </>
                             ) : isConflict ? (
                                 <>
                                     <Clock size={12} className="mr-1.5" />
@@ -536,28 +545,29 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                     <div className="space-y-6">
                         {(() => {
                              const audit = auditProduct(selectedProduct, userProfile);
-                             const warning = audit.warnings.length > 0;
+                             const critical = audit.warnings.some(w => w.severity === 'CRITICAL');
+                             const caution = audit.warnings.some(w => w.severity === 'CAUTION') && !critical;
+                             
                              const score = Number(audit.adjustedScore);
                              const isLowScore = score < 50;
-                             const isCaution = warning && score >= 50;
                              
-                             const cardStyle = isCaution ? 'bg-amber-50 border-amber-100' :
-                                               warning ? 'bg-rose-50 border-rose-100' : 
+                             const cardStyle = caution ? 'bg-amber-50 border-amber-100' :
+                                               critical ? 'bg-rose-50 border-rose-100' : 
                                                isLowScore ? 'bg-zinc-50 border-zinc-200' : 
                                                'bg-emerald-50 border-emerald-100';
 
-                             const textStyle = isCaution ? 'text-amber-700' :
-                                               warning ? 'text-rose-700' : 
+                             const textStyle = caution ? 'text-amber-700' :
+                                               critical ? 'text-rose-700' : 
                                                isLowScore ? 'text-zinc-600' :
                                                'text-emerald-700';
 
-                             const scoreStyle = isCaution ? 'text-amber-600' :
-                                                warning ? 'text-rose-600' : 
+                             const scoreStyle = caution ? 'text-amber-600' :
+                                                critical ? 'text-rose-600' : 
                                                 isLowScore ? 'text-zinc-500' :
                                                 'text-emerald-600';
 
-                             const label = isCaution ? 'Caution advised' :
-                                           warning ? 'Biometric Mismatch' : 
+                             const label = caution ? 'Caution Advised' :
+                                           critical ? 'Avoid Use' : 
                                            isLowScore ? 'Low Compatibility' : 
                                            'Excellent Fit';
 
@@ -569,7 +579,7 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                          </span>
                                          <span className={`text-3xl font-black ${scoreStyle}`}>{score}%</span>
                                      </div>
-                                     {warning ? (
+                                     {(caution || critical) ? (
                                          <p className={`text-sm font-medium leading-relaxed ${textStyle}`}>{audit.warnings[0].reason}</p>
                                      ) : isLowScore ? (
                                           <p className="text-sm text-zinc-600 font-medium leading-relaxed">{audit.analysisReason}</p>
@@ -586,16 +596,17 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                              const context = analyzeProductContext(selectedProduct, otherProducts);
                              const isRisky = shelfIQ.analysis.riskyProducts.some(r => r.name === selectedProduct.name);
 
+                             // If risky but not caught by audit (rare, usually shelf specific), fall back to shelf reason
                              if (isRisky && !auditProduct(selectedProduct, userProfile).warnings.length) {
-                                // Fallback risk message if it was caught by shelf analysis but not individual audit (e.g. SPF warning)
                                 const shelfRisk = shelfIQ.analysis.riskyProducts.find(r => r.name === selectedProduct.name);
                                 if (shelfRisk) {
+                                    const isShelfCritical = shelfRisk.severity === 'CRITICAL';
                                     return (
-                                        <div className="p-6 rounded-[1.5rem] bg-rose-50 border border-rose-100">
-                                            <h4 className="text-xs font-bold text-rose-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <div className={`p-6 rounded-[1.5rem] border ${isShelfCritical ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'}`}>
+                                            <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${isShelfCritical ? 'text-rose-700' : 'text-amber-700'}`}>
                                                 <AlertTriangle size={14} /> Biometric Alert
                                             </h4>
-                                            <p className="text-sm text-rose-800 font-medium leading-relaxed">
+                                            <p className={`text-sm font-medium leading-relaxed ${isShelfCritical ? 'text-rose-800' : 'text-amber-800'}`}>
                                                 {shelfRisk.reason}
                                             </p>
                                         </div>
@@ -653,38 +664,42 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                     </h4>
                                     <ul className="space-y-3">
                                         {/* Risks First */}
-                                        {risks.map((risk, i) => (
-                                            <li key={`r-${i}`} className="flex items-start gap-3 bg-white p-3 rounded-2xl border border-rose-100 shadow-sm">
-                                                <div className="mt-0.5 shrink-0">
-                                                    <AlertTriangle size={16} className="text-rose-500" />
-                                                </div>
-                                                <div className="flex-1">
-                                                     <div className="flex justify-between items-start mb-1">
-                                                         <span className="text-xs font-bold text-rose-950">Safety Alert</span>
-                                                         <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wide bg-rose-100 text-rose-600">
-                                                             Check
-                                                         </span>
-                                                     </div>
-                                                     <p className="text-[11px] text-zinc-600 font-medium leading-snug">
-                                                         {risk.reason}
-                                                     </p>
-                                                </div>
-                                            </li>
-                                        ))}
+                                        {risks.map((risk, i) => {
+                                            const isCrit = risk.severity === 'CRITICAL';
+                                            return (
+                                                <li key={`r-${i}`} className={`flex items-start gap-3 bg-white p-3 rounded-2xl border shadow-sm ${isCrit ? 'border-rose-100' : 'border-amber-100'}`}>
+                                                    <div className="mt-0.5 shrink-0">
+                                                        {isCrit ? <Ban size={16} className="text-rose-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                         <div className="flex justify-between items-start mb-1">
+                                                             <span className={`text-xs font-bold ${isCrit ? 'text-rose-950' : 'text-amber-950'}`}>Safety Alert</span>
+                                                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wide ${isCrit ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                                 {isCrit ? 'Issue' : 'Caution'}
+                                                             </span>
+                                                         </div>
+                                                         <p className="text-[11px] text-zinc-600 font-medium leading-snug">
+                                                             {risk.reason}
+                                                         </p>
+                                                    </div>
+                                                </li>
+                                            )
+                                        })}
 
                                         {/* Benefits Next */}
                                         {getSortedBenefits(selectedProduct).slice(0, 3).map((b, i) => {
                                              const userScore = userProfile.biometrics[b.target as keyof SkinMetrics] as number || 0;
-                                             const isCritical = userScore < 50;
-                                             // Even if mismatch, show benefits if score > 30 to show "some" good
-                                             const isMismatch = audit.adjustedScore < 30;
+                                             const isCriticalNeed = userScore < 50;
+                                             // Only show benefits if not a complete disaster
+                                             const audit = auditProduct(selectedProduct, userProfile);
+                                             const isTotalMismatch = audit.adjustedScore < 30;
                                              
-                                             if (isMismatch) return null;
+                                             if (isTotalMismatch) return null;
 
                                              return (
                                                  <li key={`b-${i}`} className="flex items-start gap-3 bg-white p-3 rounded-2xl border border-zinc-100 shadow-sm">
                                                      <div className={`mt-0.5 shrink-0`}>
-                                                         {isCritical ? <ShieldCheck size={16} className="text-emerald-500" /> : 
+                                                         {isCriticalNeed ? <ShieldCheck size={16} className="text-emerald-500" /> : 
                                                           <Zap size={16} className="text-teal-500" />}
                                                      </div>
                                                      
@@ -692,10 +707,10 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
                                                          <div className="flex justify-between items-start mb-1">
                                                              <span className="text-xs font-bold text-zinc-900">{b.ingredient}</span>
                                                              <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wide ${
-                                                                 isCritical ? 'bg-emerald-100 text-emerald-600' :
+                                                                 isCriticalNeed ? 'bg-emerald-100 text-emerald-600' :
                                                                  'bg-teal-50 text-teal-600'
                                                              }`}>
-                                                                 {isCritical ? 'Priority Fix' : 'Effective'}
+                                                                 {isCriticalNeed ? 'Priority Fix' : 'Effective'}
                                                              </span>
                                                          </div>
                                                          <p className="text-xs text-zinc-600 font-medium leading-snug">

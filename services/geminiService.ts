@@ -384,9 +384,10 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
             TASKS:
             1. IDENTIFY: Scan the image to identify the Brand and Product Name.
             2. INGREDIENTS: Attempt to read the ingredient list from the label.
-               CRITICAL: If the ingredient list is blurry, small, or hidden, YOU MUST USE GOOGLE SEARCH to find the official "Full Ingredients List (INCI)" for this exact product name. Do not guess.
-               Search Sources: Watsons Malaysia, Guardian MY, Sephora MY, INCIDecoder, Skincarisma.
-            3. PRICE: Search for the current price in MYR (Malaysian Ringgit).
+               - If the label is visible, transcribe ingredients.
+               - If the text is blurry or hidden, use your INTERNAL KNOWLEDGE BASE to recall the ingredients if this is a known/popular product.
+               - Do not hallucinate. If unknown, return empty ingredients array.
+            3. PRICE: Estimate retail price in MYR based on brand tier (e.g. Drugstore vs Luxury).
             4. SCORING STRATEGY (IMPORTANT):
                - BASE SCORE: Start at 85.
                - BONUS: Add +5 points for EACH "Star Active" that specifically helps the user (e.g., Salicylic Acid for Acne, Ceramides for Dryness). Max Bonus +20.
@@ -417,7 +418,6 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
                 ]
             },
             config: {
-                tools: [{ googleSearch: {} }], // ENABLE HYBRID VISION + SEARCH
                 responseMimeType: "application/json"
             }
         });
@@ -435,7 +435,7 @@ export const analyzeProductImage = async (imageBase64: string, userMetrics?: Ski
             id: Date.now().toString(),
             dateScanned: Date.now()
         };
-    }, getFallbackProduct(userMetrics), 60000); // 60s timeout for deep search
+    }, getFallbackProduct(userMetrics), 30000); // Reduced timeout since no web search
 };
 
 // --- SEARCH & ONLINE ANALYSIS (New Features) ---
@@ -462,11 +462,8 @@ export const generatePersonalizedHolyGrails = async (user: UserProfile): Promise
         - Aging: ${metrics.wrinkleFine}
         
         TASK:
-        Identify the absolute "Holy Grail" (Best in Class) skincare product available in Malaysia (Watsons/Guardian/Sephora) for this specific user's skin concerns for EACH category:
-        1. CLEANSER
-        2. MOISTURIZER
-        3. SPF
-        4. TREATMENT (Serum/Spot)
+        Identify the absolute "Holy Grail" (Best in Class) skincare product generally available in Malaysia/Global Markets for this specific user's skin concerns for EACH category.
+        Use your internal product knowledge base.
 
         CRITERIA:
         - High Efficacy matches for the user's specific low metrics.
@@ -487,25 +484,24 @@ export const generatePersonalizedHolyGrails = async (user: UserProfile): Promise
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json"
             }
         });
 
         const text = response.text || "{}";
         return parseJSONFromText(text) || {};
-    }, {}, 45000);
+    }, {}, 20000);
 }
 
 export const searchProducts = async (query: string): Promise<SearchResult[]> => {
     return runWithRetry(async (ai) => {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Find skincare products matching "${query}" available at Watsons Malaysia, Guardian MY, or Sephora Malaysia. 
-            Return a STRICT JSON array of up to 5 products.
+            contents: `Identify skincare products matching "${query}" using your internal database.
+            Return a STRICT JSON array of up to 5 real, existing products.
             Format: [{ "name": "Exact Name", "brand": "Brand", "rating": 4.5 }]`,
             config: {
-                tools: [{ googleSearch: {} }]
+                // No tools - relies on training data
             }
         });
 
@@ -521,7 +517,7 @@ export const searchProducts = async (query: string): Promise<SearchResult[]> => 
             }));
         }
         return [];
-    }, [], 30000); // 30s timeout
+    }, [], 20000); // 20s timeout
 };
 
 export const findBetterAlternatives = async (originalProductType: string, user: UserProfile): Promise<SearchResult[]> => {
@@ -540,11 +536,11 @@ export const findBetterAlternatives = async (originalProductType: string, user: 
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Search for 3 "Holy Grail" top-rated ${originalProductType} products specifically for ${skinType} skin ${concern ? `targeting ${concern}` : ''}.
-            Focus on products available at Watsons Malaysia, Guardian, or Sephora that are highly recommended by dermatologists.
+            contents: `Suggest 3 "Holy Grail" top-rated ${originalProductType} products specifically for ${skinType} skin ${concern ? `targeting ${concern}` : ''}.
+            Focus on popular, dermatologically backed brands.
             Return STRICT JSON array: [{ "name": "Product Name", "brand": "Brand", "rating": 4.9 }]`,
             config: {
-                tools: [{ googleSearch: {} }]
+                // No tools
             }
         });
 
@@ -554,7 +550,7 @@ export const findBetterAlternatives = async (originalProductType: string, user: 
         
         if (Array.isArray(results)) return results;
         return [];
-    }, [], 45000); // 45s timeout
+    }, [], 25000); // 25s timeout
 }
 
 export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics): Promise<Product> => {
@@ -567,10 +563,9 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
         - Acne: ${userMetrics.acneActive}
         
         TASK:
-        1. SEARCH: Use Google Search to find the FULL INGREDIENTS LIST (INCI) for "${productName}". 
-           - Sources: Watsons Malaysia, Guardian, INCIDecoder, Skincarisma, Official Site.
-           - Find current price in MYR.
-           - IMPORTANT: You MUST extract the actual list of ingredients.
+        1. RECALL: Use your internal product database to find the likely FULL INGREDIENTS LIST (INCI) for "${productName}". 
+           - Provide the most common formulation for this specific product name.
+           - Estimate current price in MYR.
         
         2. ANALYZE & SCORE:
            - BASE SCORE: Start at 85 (Good baseline).
@@ -596,7 +591,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                tools: [{ googleSearch: {} }]
+                // No tools
             }
         });
 
@@ -617,7 +612,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
             benefits: data.benefits || [],
             dateScanned: Date.now()
         };
-    }, undefined, 60000); // 60s timeout
+    }, undefined, 25000); // 25s timeout
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
@@ -646,19 +641,26 @@ export const auditProduct = (product: Product, user: UserProfile) => {
     let score = product.suitabilityScore;
     
     // 1. Start with risks identified by AI
-    const warnings: { reason: string }[] = product.risks ? product.risks.map(r => ({ 
-        reason: `${r.ingredient}: ${r.reason}` 
+    // NEW: Assign 'CRITICAL' only if riskLevel is explicitly 'HIGH' or dangerous mismatch
+    const warnings: { reason: string, severity: 'CAUTION' | 'CRITICAL' }[] = product.risks ? product.risks.map(r => ({ 
+        reason: `${r.ingredient}: ${r.reason}`,
+        severity: r.riskLevel === 'HIGH' ? 'CRITICAL' : 'CAUTION'
     })) : [];
     
     // 2. Local Safety Checks (Fallback/Double Check)
     if (product.ingredients && product.ingredients.length > 0) {
-        // Sensitivity Check
+        // Sensitivity Check (Fragrance/Alcohol)
         const hasFragrance = product.ingredients.some(i => i.toLowerCase().includes('fragrance') || i.toLowerCase().includes('parfum'));
         const hasAlcohol = product.ingredients.some(i => i.toLowerCase().includes('alcohol denat') || i.toLowerCase().includes('ethanol'));
         
         if (metrics.redness < 60 && (hasFragrance || hasAlcohol)) {
             if (!warnings.some(w => w.reason.toLowerCase().includes('fragrance') || w.reason.toLowerCase().includes('alcohol'))) {
-                 warnings.push({ reason: "Contains potential irritants (Fragrance/Alcohol) for your sensitive skin." });
+                 // ONLY mark CRITICAL if skin is EXTREMELY sensitive (<30)
+                 const severity = metrics.redness < 30 ? 'CRITICAL' : 'CAUTION';
+                 warnings.push({ 
+                     reason: severity === 'CRITICAL' ? "CRITICAL: Severe sensitivity trigger (Fragrance/Alcohol)." : "Contains potential irritants (Fragrance/Alcohol).", 
+                     severity 
+                 });
             }
         }
         
@@ -666,7 +668,12 @@ export const auditProduct = (product: Product, user: UserProfile) => {
         const isDrying = product.ingredients.some(i => ['clay', 'charcoal', 'salicylic acid', 'kaolin'].includes(i.toLowerCase()));
         if (metrics.hydration < 50 && isDrying && product.type !== 'CLEANSER') {
              if (!warnings.some(w => w.reason.toLowerCase().includes('drying'))) {
-                warnings.push({ reason: "Ingredients may be too drying for your current hydration levels." });
+                // Only critical if extremely dry (<30)
+                const severity = metrics.hydration < 30 ? 'CRITICAL' : 'CAUTION';
+                warnings.push({ 
+                    reason: severity === 'CRITICAL' ? "CRITICAL: Will severely worsen dehydration." : "Ingredients may be too drying.", 
+                    severity 
+                });
              }
         }
 
@@ -675,7 +682,11 @@ export const auditProduct = (product: Product, user: UserProfile) => {
         const hasComedogenic = product.ingredients.some(i => comedogenic.includes(i.toLowerCase()));
         if (metrics.acneActive < 60 && hasComedogenic) {
              if (!warnings.some(w => w.reason.toLowerCase().includes('comedogenic'))) {
-                warnings.push({ reason: "Contains potential pore-clogging ingredients." });
+                const severity = metrics.acneActive < 30 ? 'CRITICAL' : 'CAUTION';
+                warnings.push({ 
+                    reason: severity === 'CRITICAL' ? "CRITICAL: High risk of breakouts." : "Contains potential pore-clogging ingredients.", 
+                    severity 
+                });
              }
         }
 
@@ -691,24 +702,41 @@ export const auditProduct = (product: Product, user: UserProfile) => {
     }
 
     // FINAL SYNC: Update score based on warnings (Penalty System)
-    // Relaxed PENALTY: 4 points per warning.
     let finalScore = score;
-    if (warnings.length > 0) {
-        const penalty = warnings.length * 4; 
-        finalScore = Math.max(10, finalScore - penalty);
-    }
     
-    // STRICT CAP FOR WARNINGS:
-    // User wants 90+ to be exclusively for "Perfect" products.
-    // Products with warnings should hover around 80.
-    if (warnings.length > 0 && finalScore >= 85) {
+    // Apply penalties based on severity
+    warnings.forEach(w => {
+        if (w.severity === 'CRITICAL') {
+            finalScore -= 20; // Heavy penalty for critical issues
+        } else {
+            finalScore -= 4; // Light penalty for cautions
+        }
+    });
+    
+    finalScore = Math.max(10, finalScore);
+    
+    // STRICT CAP FOR CRITICAL ISSUES:
+    // If there is a CRITICAL issue, score cannot exceed 40.
+    if (warnings.some(w => w.severity === 'CRITICAL')) {
+        finalScore = Math.min(40, finalScore);
+    } else if (warnings.length > 0 && finalScore >= 85) {
+        // If there are standard cautions, cap at 85 (Good but not Perfect)
         finalScore = 85; 
     }
+
+    // Determine the primary reason text
+    const criticalWarning = warnings.find(w => w.severity === 'CRITICAL');
+    const firstWarning = warnings[0];
+    
+    let analysisReason = "Average Fit";
+    if (criticalWarning) analysisReason = "Critical Mismatch";
+    else if (firstWarning) analysisReason = "Use with Caution";
+    else if (finalScore > 80) analysisReason = "Great Match";
 
     return {
         adjustedScore: Math.round(finalScore),
         warnings,
-        analysisReason: warnings.length > 0 ? "Potential Risks" : finalScore > 80 ? "Great Match" : "Average Fit"
+        analysisReason
     };
 };
 
@@ -747,11 +775,14 @@ export const analyzeShelfHealth = (products: Product[], user: UserProfile) => {
     if (spfCount > 1) redundancies.push('Multiple SPFs');
 
     // Risky Products (Based on User Profile)
-    const riskyProducts: { name: string, reason: string }[] = [];
+    // Updated to handle severity
+    const riskyProducts: { name: string, reason: string, severity: 'CAUTION' | 'CRITICAL' }[] = [];
     products.forEach(p => {
         const audit = auditProduct(p, user);
         if (audit.warnings.length > 0) {
-            riskyProducts.push({ name: p.name, reason: audit.warnings[0].reason });
+            // Find the most severe warning
+            const severe = audit.warnings.find(w => w.severity === 'CRITICAL') || audit.warnings[0];
+            riskyProducts.push({ name: p.name, reason: severe.reason, severity: severe.severity });
         }
     });
 
@@ -766,11 +797,13 @@ export const analyzeShelfHealth = (products: Product[], user: UserProfile) => {
 
     // Grade
     let grade = 'B';
-    const totalIssues = missing.length + conflicts.length + riskyProducts.length;
-    if (totalIssues === 0 && products.length >= 3) grade = 'S';
-    else if (totalIssues === 0) grade = 'A';
-    else if (totalIssues > 2) grade = 'D';
-    else if (totalIssues > 0) grade = 'C';
+    const criticalIssues = riskyProducts.filter(r => r.severity === 'CRITICAL').length + conflicts.length;
+    const cautionIssues = riskyProducts.filter(r => r.severity === 'CAUTION').length;
+    
+    if (criticalIssues === 0 && cautionIssues === 0 && products.length >= 3 && missing.length === 0) grade = 'S';
+    else if (criticalIssues === 0 && missing.length === 0) grade = 'A';
+    else if (criticalIssues > 0) grade = 'D'; // Any critical issue drops grade significantly
+    else if (cautionIssues > 2 || missing.length > 0) grade = 'C';
 
     return {
         analysis: {
@@ -830,13 +863,16 @@ export const getBuyingDecision = (product: Product, shelf: Product[], user: User
     let description = 'This product is okay, but check for better options.';
     let color = 'zinc';
 
+    const hasCritical = audit.warnings.some(w => w.severity === 'CRITICAL');
+    const hasCaution = audit.warnings.some(w => w.severity === 'CAUTION');
+
     // Updated Decision Logic to allow "Caution" instead of immediate "Avoid"
-    if (audit.adjustedScore < 50) {
+    if (audit.adjustedScore < 40 || hasCritical) {
         decision = 'AVOID';
         title = 'Bad Match';
         description = 'Contains ingredients that significantly conflict with your skin.';
         color = 'rose';
-    } else if (audit.warnings.length > 0) {
+    } else if (hasCaution) {
         // Good score but has warnings -> Caution
         decision = 'CAUTION';
         title = 'Check Risks';

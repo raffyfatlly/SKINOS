@@ -27,10 +27,10 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
     if (isProcessing) {
         const messages = [
             "Analyzing Label...",
-            "Checking Databases...",
-            "Searching Watsons MY...",
-            "Verifying Ingredients...",
-            "Calculating Match..."
+            "Reading Ingredients...",
+            "Checking Formulation...",
+            "Matching Biometrics...",
+            "Calculating Score..."
         ];
         let i = 0;
         setLoadingText(messages[0]);
@@ -185,7 +185,7 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
             <div className="text-center p-6">
                <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
                <h3 className="text-2xl font-bold text-white mb-2">{loadingText}</h3>
-               <p className="text-emerald-400 text-sm font-medium tracking-wide">This may take up to 30 seconds...</p>
+               <p className="text-emerald-400 text-sm font-medium tracking-wide">Using AI Knowledge Base...</p>
             </div>
           </div>
         )}
