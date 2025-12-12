@@ -36,7 +36,7 @@ const App: React.FC = () => {
   // Modals & Overlays
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [notification, setNotification] = useState<{ type: NotificationType, title: string, desc: string, action: string, onAction: () => void } | null>(null);
+  const [notification, setNotification] = useState<{ type: NotificationType, title: string, description: string, actionLabel: string, onAction: () => void } | null>(null);
   const [aiQuery, setAiQuery] = useState<string | null>(null);
 
   // --- INITIALIZATION ---
