@@ -245,17 +245,24 @@ export const analyzeFaceSkin = async (
         
         INPUT DATA:
         - Image: High-Resolution Face Scan.
-        - Computer Vision Estimates (Reference): ${metricString}
+        - CV Estimate (Rough Guide Only): ${metricString}
         ${anchorContext}
         
         TASK:
         Grade the skin metrics (0-100). Higher is ALWAYS Better/Healthier.
         
-        SCORING RUBRIC:
-        - 90-100: Flawless / Ideal.
-        - 75-89: Good / Minor imperfections.
-        - 50-74: Visible issues (Acne, Redness, Lines).
-        - 0-49: Severe issues.
+        CRITICAL SCORING RULES:
+        - High Score (90-100) = EXCELLENT/CLEAR Skin. 
+        - Low Score (20-50) = POOR/SEVERE Issues.
+        
+        SPECIFIC METRIC SCALES:
+        - Acne: 100 = Glass Skin/No Blemishes. 60 = Mild Breakouts. 30 = Severe Acne.
+        - Wrinkles: 100 = Smooth/Baby Skin. 60 = Fine Lines. 30 = Deep Wrinkles.
+        - Redness: 100 = Even Tone. 60 = Rosacea/Inflammation.
+        
+        If the visual evidence shows "Minimal" or "Good" skin, the score MUST be above 80.
+        Do NOT blindly follow the CV Estimate if it contradicts the visual image (CV can be wrong due to lighting).
+        Trust your visual analysis of the image features first.
         
         OUTPUT FORMAT: JSON.
         Fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, stabilityRating (0-100), analysisSummary (string).
@@ -263,7 +270,7 @@ export const analyzeFaceSkin = async (
         INSTRUCTION FOR SUMMARY:
         Provide a professional clinical assessment (3-4 sentences). **Bold** the specific diagnosis, root cause, or most critical concern using asterisks like **this**. Do not summarize the scores, explain the *why*. Example: "Overall skin health is stable, but **congestion in the T-zone** indicates improper cleansing. Hydration levels are adequate, though **mild erythema on the cheeks** suggests sensitivity."
         
-        Be consistent. If unsure, lean towards the Reference scores.
+        Be consistent. If unsure about image quality, use Reference scores as a baseline only.
         `;
 
         const response = await ai.models.generateContent({
@@ -438,6 +445,56 @@ export interface SearchResult {
     brand: string;
     url?: string;
     rating?: number;
+    price?: number;
+    score?: number; // Pre-calculated suitability
+}
+
+// NEW: Personalized "Holy Grail" Finder for Background Search
+export const generatePersonalizedHolyGrails = async (user: UserProfile): Promise<Record<string, SearchResult>> => {
+    return runWithRetry(async (ai) => {
+        const metrics = user.biometrics;
+        const prompt = `
+        User Profile:
+        - Acne: ${metrics.acneActive}
+        - Redness: ${metrics.redness}
+        - Hydration: ${metrics.hydration}
+        - Oiliness: ${metrics.oiliness}
+        - Aging: ${metrics.wrinkleFine}
+        
+        TASK:
+        Identify the absolute "Holy Grail" (Best in Class) skincare product available in Malaysia (Watsons/Guardian/Sephora) for this specific user's skin concerns for EACH category:
+        1. CLEANSER
+        2. MOISTURIZER
+        3. SPF
+        4. TREATMENT (Serum/Spot)
+
+        CRITERIA:
+        - High Efficacy matches for the user's specific low metrics.
+        - Must be a real, popular product.
+        - Estimate price in MYR.
+        - Estimate a "Suitability Score" (0-100) for this user.
+
+        OUTPUT: Strict JSON Object Map.
+        {
+           "CLEANSER": { "name": "Name", "brand": "Brand", "price": 45, "score": 95 },
+           "MOISTURIZER": { "name": "Name", "brand": "Brand", "price": 60, "score": 98 },
+           "SPF": { "name": "Name", "brand": "Brand", "price": 50, "score": 92 },
+           "TREATMENT": { "name": "Name", "brand": "Brand", "price": 85, "score": 96 }
+        }
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json"
+            }
+        });
+
+        const text = response.text || "{}";
+        return parseJSONFromText(text) || {};
+    }, {}, 45000);
 }
 
 export const searchProducts = async (query: string): Promise<SearchResult[]> => {

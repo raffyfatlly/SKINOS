@@ -11,10 +11,10 @@ import GuideOverlay from './components/GuideOverlay';
 import SaveProfileModal from './components/SaveProfileModal';
 import ProfileSetup from './components/ProfileSetup';
 import AIAssistant from './components/AIAssistant';
-import { getBuyingDecision, findBetterAlternatives, SearchResult, analyzeProductFromSearch } from './services/geminiService';
+import { getBuyingDecision, findBetterAlternatives, SearchResult, analyzeProductFromSearch, generatePersonalizedHolyGrails } from './services/geminiService';
 import { auth } from './services/firebase';
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
-import { LayoutGrid, ScanBarcode, User, Sparkles, HelpCircle, ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle as QuestionIcon, ThumbsUp, ArrowRightLeft, ThumbsDown, FlaskConical, ShoppingBag, X, Zap, WifiOff, Camera, Search, Globe, ChevronRight, CheckCircle2, Droplet, Sun, Layers, Brush } from 'lucide-react';
+import { LayoutGrid, ScanBarcode, User, Sparkles, HelpCircle, ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle as QuestionIcon, ThumbsUp, ArrowRightLeft, ThumbsDown, FlaskConical, ShoppingBag, X, Zap, WifiOff, Camera, Search, Globe, ChevronRight, CheckCircle2, Droplet, Sun, Layers, Brush, TrendingUp, PiggyBank, ArrowRight } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 
 // --- VISUAL HIGHLIGHT COMPONENT ---
@@ -59,6 +59,10 @@ const App: React.FC = () => {
   const [alternatives, setAlternatives] = useState<SearchResult[]>([]);
   const [isSearchingAlternatives, setIsSearchingAlternatives] = useState(false);
   const [isAnalyzingAlternative, setIsAnalyzingAlternative] = useState(false);
+  
+  // Holy Grail Cache (Background Search)
+  const [holyGrailCache, setHolyGrailCache] = useState<Record<string, SearchResult>>({});
+  const [enticement, setEnticement] = useState<{ type: 'UPGRADE' | 'VALUE' | 'VALIDATED', product: SearchResult } | null>(null);
 
   // AI Chat State
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
@@ -87,6 +91,9 @@ const App: React.FC = () => {
              setUser(loadedUser);
              setShelf(loadedShelf);
              setView(AppView.DASHBOARD);
+             
+             // Trigger background search if we have user data but no cache
+             triggerBackgroundSearch(loadedUser);
         }
         setIsLoading(false);
     };
@@ -107,6 +114,7 @@ const App: React.FC = () => {
                      setView(AppView.DASHBOARD);
                      setIsPreviewMode(false);
                      setShowSaveProfileModal(false);
+                     triggerBackgroundSearch(cloudUser);
                 }
             } else {
                 // User logged out
@@ -116,6 +124,17 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }
   }, []);
+
+  const triggerBackgroundSearch = (u: UserProfile) => {
+      // Only run if cache is empty to avoid spamming API
+      if (Object.keys(holyGrailCache).length === 0) {
+          console.log("Triggering Background Holy Grail Search...");
+          generatePersonalizedHolyGrails(u).then(results => {
+              console.log("Holy Grail Cache Updated", results);
+              setHolyGrailCache(results);
+          }).catch(err => console.error("Background search failed", err));
+      }
+  };
 
   // --- INTERACTIVE GUIDE SEQUENCER ---
   useEffect(() => {
@@ -170,6 +189,7 @@ const App: React.FC = () => {
       setGuideStep(null);
       setIsPreviewMode(false);
       setView(AppView.ONBOARDING);
+      setHolyGrailCache({}); // Clear cache
   };
 
   const handleOnboardingComplete = (data: { name: string; age: number; skinType: SkinType }) => {
@@ -197,11 +217,43 @@ const App: React.FC = () => {
     setUser(newUser);
     saveUserData(newUser, shelf); // Save to Storage Service
     setView(AppView.DASHBOARD);
+    
+    // Refresh Holy Grail Cache with new metrics
+    setHolyGrailCache({}); // Reset old cache
+    triggerBackgroundSearch(newUser);
   };
 
   const handleProductFound = (product: Product) => {
     setLastScannedProduct(product);
     setAlternatives([]); // Reset alternatives
+    setEnticement(null); // Reset enticement
+    
+    // Check against Holy Grail Cache for smart enticement
+    const type = product.type;
+    // Map product type to cache keys
+    let cacheKey = type;
+    if (type === 'SERUM' || type === 'TREATMENT') cacheKey = 'TREATMENT';
+
+    const holyGrail = holyGrailCache[cacheKey];
+    
+    if (holyGrail) {
+        const productScore = product.suitabilityScore;
+        const grailScore = holyGrail.score || 95;
+        const productPrice = product.estimatedPrice || 0;
+        const grailPrice = holyGrail.price || 100;
+
+        if (productScore < grailScore - 5) {
+            // Significant upgrade available
+            setEnticement({ type: 'UPGRADE', product: holyGrail });
+        } else if (grailPrice < productPrice - 15) {
+            // Cheaper alternative available with high score
+            setEnticement({ type: 'VALUE', product: holyGrail });
+        } else {
+             // Validate choice
+             setEnticement({ type: 'VALIDATED', product: holyGrail });
+        }
+    }
+
     setShowProductModal(true);
     setView(AppView.SMART_SHELF); 
   };
@@ -266,6 +318,7 @@ const App: React.FC = () => {
           setShelf([]);
           setView(AppView.DASHBOARD);
           setShowSaveProfileModal(false);
+          triggerBackgroundSearch(mockUser);
       }
   };
   
@@ -293,8 +346,7 @@ const App: React.FC = () => {
           // Analyze the selected alternative as a new product
           const newProduct = await analyzeProductFromSearch(alt.name, user.biometrics);
           // Replace current view with the new product
-          setLastScannedProduct(newProduct);
-          setAlternatives([]); // Clear alternatives since we found one
+          handleProductFound(newProduct);
       } catch (e) {
           console.error("Failed to analyze alternative", e);
       } finally {
@@ -521,7 +573,7 @@ const App: React.FC = () => {
                              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{lastScannedProduct.brand}</p>
                          </div>
                     </div>
-                    <button onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }} className="w-9 h-9 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-zinc-100 transition-colors hover:text-zinc-900">
+                    <button onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); setEnticement(null); }} className="w-9 h-9 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-zinc-100 transition-colors hover:text-zinc-900">
                         <X size={18} />
                     </button>
                 </div>
@@ -544,8 +596,58 @@ const App: React.FC = () => {
                          </p>
                     </div>
 
-                    {/* FIND BETTER ALTERNATIVES (Clean Outline Style) */}
-                    {showFindBetter && (
+                    {/* SMART ENTICEMENT SECTION (Background Search Result) */}
+                    {enticement && (
+                        <div className="animate-in slide-in-from-bottom-4 duration-700">
+                            {enticement.type === 'UPGRADE' ? (
+                                <button 
+                                    onClick={() => handleSelectAlternative(enticement.product)}
+                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-[1.5rem] p-5 shadow-lg shadow-indigo-200 text-left relative overflow-hidden group hover:scale-[1.01] transition-transform"
+                                >
+                                    <div className="absolute top-0 right-0 p-3 opacity-20">
+                                        <Sparkles size={64} className="text-white rotate-12" />
+                                    </div>
+                                    <div className="relative z-10 text-white">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="px-2 py-0.5 bg-white/20 rounded text-[9px] font-bold uppercase tracking-widest backdrop-blur-sm">Better Match Found</span>
+                                            {enticement.product.score && <span className="text-[10px] font-bold text-indigo-100">{enticement.product.score}% Score</span>}
+                                        </div>
+                                        <h3 className="text-lg font-black leading-tight mb-0.5">{enticement.product.name}</h3>
+                                        <p className="text-xs text-indigo-100 font-medium mb-3">{enticement.product.brand}</p>
+                                        <div className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest bg-white text-indigo-600 px-3 py-1.5 rounded-full">
+                                            View Upgrade <ArrowRight size={12} />
+                                        </div>
+                                    </div>
+                                </button>
+                            ) : enticement.type === 'VALUE' ? (
+                                <button 
+                                    onClick={() => handleSelectAlternative(enticement.product)}
+                                    className="w-full bg-emerald-50 border border-emerald-100 rounded-[1.5rem] p-5 text-left relative overflow-hidden group hover:border-emerald-200 transition-colors"
+                                >
+                                     <div className="flex justify-between items-start">
+                                         <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <PiggyBank size={14} className="text-emerald-600" />
+                                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Smart Save</span>
+                                            </div>
+                                            <p className="text-sm font-medium text-emerald-900 leading-snug mb-1">
+                                                Similar performance for less.
+                                            </p>
+                                            <p className="text-xs text-emerald-600 font-bold">
+                                                {enticement.product.name} (~RM {enticement.product.price})
+                                            </p>
+                                         </div>
+                                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-emerald-500 shadow-sm">
+                                             <TrendingUp size={16} />
+                                         </div>
+                                     </div>
+                                </button>
+                            ) : null}
+                        </div>
+                    )}
+
+                    {/* FIND BETTER ALTERNATIVES (Manual Trigger) */}
+                    {showFindBetter && !enticement && (
                         <div className="animate-in fade-in slide-in-from-bottom-4">
                              <button 
                                 onClick={handleFindAlternatives}
@@ -706,7 +808,7 @@ const App: React.FC = () => {
                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/95 backdrop-blur-xl border-t border-zinc-100 z-30">
                     <div className="grid grid-cols-2 gap-4">
                          <button 
-                            onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); }}
+                            onClick={() => { setShowProductModal(false); setLastScannedProduct(null); setAlternatives([]); setEnticement(null); }}
                             className="py-4 rounded-[1.2rem] border border-zinc-200 text-zinc-500 font-bold text-xs uppercase tracking-widest hover:bg-zinc-50 hover:text-zinc-700 transition-colors"
                          >
                             Discard

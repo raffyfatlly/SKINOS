@@ -1,5 +1,4 @@
 
-
 import { SkinMetrics } from '../types';
 
 /**
@@ -135,9 +134,9 @@ function calculateAcneScore(img: ImageData): number {
     }
     const avgA = count > 0 ? sumA / count : 128;
     
-    // Thresholds: Acne is significantly redder than average skin AND often slightly darker (shadow)
-    // We rely mostly on 'a' channel deviation.
-    const rednessThreshold = avgA + 8; // If pixel is 8 units redder than average
+    // Thresholds: Acne is significantly redder than average skin
+    // Relaxed threshold to reduce false positives from general skin flush
+    const rednessThreshold = avgA + 12; 
 
     for (let i = 0; i < data.length; i += 4) {
         const { a } = rgbToLab(data[i], data[i+1], data[i+2]);
@@ -148,8 +147,9 @@ function calculateAcneScore(img: ImageData): number {
 
     // Density calculation
     const density = acnePixels / totalPixels;
-    // Mapping: 0% density = 100 score. 5% density = 50 score.
-    return Math.max(20, 100 - (density * 1500));
+    // Mapping: 0% density = 100 score. 5% density used to be 50 score, now relaxed.
+    // New: 5% density = 100 - (0.05 * 800) = 60 score (still passing).
+    return Math.max(20, 100 - (density * 800));
 }
 
 // 2. REDNESS: Global Inflammation (Erythema)
@@ -168,10 +168,9 @@ function calculateRednessScore(img: ImageData): number {
     
     // Healthy skin 'a' value is usually around 12-16.
     // Rosacea/Inflamed skin is > 20.
-    // Map avgA [12...25] to Score [100...40]
-    
-    if (avgA <= 12) return 98;
-    const penalty = (avgA - 12) * 4.5; // Steep penalty for redness
+    // Adjusted start point to 14 to allow more natural warmth
+    if (avgA <= 14) return 98;
+    const penalty = (avgA - 14) * 4.0; // Slightly reduced penalty
     return Math.max(20, 100 - penalty);
 }
 
