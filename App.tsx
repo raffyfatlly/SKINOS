@@ -145,13 +145,6 @@ const App: React.FC = () => {
       const handleNavClick = (view: AppView) => {
           // RESTRICTION: Only logged-in users can search or scan products
           if ((view === AppView.PRODUCT_SEARCH || view === AppView.PRODUCT_SCANNER) && userProfile?.isAnonymous) {
-              setNotification({
-                  type: 'GENERIC',
-                  title: 'Member Exclusive',
-                  desc: 'Create an account to add products.',
-                  action: 'Join',
-                  onAction: () => setShowSaveModal(true)
-              });
               setShowSaveModal(true);
               return;
           }
