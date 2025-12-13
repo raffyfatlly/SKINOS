@@ -344,3 +344,59 @@ export const getBuyingDecision = (product: Product, shelf: Product[], user: User
         comparison: { result: audit.adjustedScore > 70 ? 'BETTER' : 'NEUTRAL' }
     };
 };
+
+export const generateRoutineRecommendations = async (user: UserProfile): Promise<any> => {
+    return runWithRetry<any>(async (ai) => {
+        const prompt = `
+        ACT AS AN EXPERT DERMATOLOGIST.
+        User Profile: Age ${user.age}, Skin Type ${user.skinType}.
+        Metrics (0-100, higher is better): ${JSON.stringify(user.biometrics)}.
+        Goals: ${JSON.stringify(user.preferences?.goals || [])}.
+        Sensitivity: ${user.preferences?.sensitivity || 'MILD'}.
+
+        TASK:
+        Generate a comprehensive AM and PM skincare routine.
+        For EACH step (Cleanser, Eye Treatment, Serum, Moisturizer, SPF), provide exactly 3 specific real-world product recommendations corresponding to price tiers:
+        1. BUDGET (Effective, affordable, drugstore e.g. CeraVe, Ordinary, Inkey List)
+        2. VALUE (Mid-range, high efficacy e.g. La Roche-Posay, Paula's Choice, Cosrx)
+        3. LUXURY (High-end, premium formulation e.g. Skinceuticals, Tatcha, Dr. Dennis Gross)
+
+        IMPORTANT RULES:
+        - Products MUST be safe for the user's specific metrics (e.g. if redness < 50, strictly no harsh scrubs/fragrance).
+        - PRICES MUST BE ESTIMATED IN MALAYSIAN RINGGIT (RM).
+        - Provide a short "Why?" for each product explaining its fit for the user's metrics.
+
+        OUTPUT FORMAT (Strict JSON):
+        {
+          "am": [
+            {
+              "step": "Cleanser",
+              "products": [
+                { "name": "...", "brand": "...", "tier": "BUDGET", "price": "RM 35", "reason": "...", "rating": 95 },
+                { "name": "...", "brand": "...", "tier": "VALUE", "price": "RM 85", "reason": "...", "rating": 98 },
+                { "name": "...", "brand": "...", "tier": "LUXURY", "price": "RM 250", "reason": "...", "rating": 97 }
+              ]
+            },
+            ... other steps (Serum, Moisturizer, SPF)
+          ],
+          "pm": [
+            {
+               "step": "Cleanser", ...
+            },
+            {
+               "step": "Eye Treatment", ... (Include Eye Puffiness/Dark Circle treatment here)
+            },
+            ... other steps (Serum, Moisturizer - No SPF)
+          ]
+        }
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
+        });
+
+        return parseJSONFromText(response.text || "{}");
+    }, null, 60000);
+}

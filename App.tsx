@@ -22,6 +22,7 @@ import ProductSearch from './components/ProductSearch';
 import ProfileSetup from './components/ProfileSetup';
 import AIAssistant from './components/AIAssistant';
 import BuyingAssistant from './components/BuyingAssistant';
+import PremiumRoutineBuilder from './components/PremiumRoutineBuilder';
 import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 
@@ -174,7 +175,7 @@ const App: React.FC = () => {
 
   // --- RENDER HELPERS ---
   const renderNavBar = () => {
-      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH, AppView.BUYING_ASSISTANT].includes(currentView)) return null;
+      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH, AppView.BUYING_ASSISTANT, AppView.ROUTINE_BUILDER].includes(currentView)) return null;
 
       const navItemClass = (view: AppView) => 
         `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 ${currentView === view ? 'text-teal-600 bg-teal-50 scale-105' : 'text-zinc-400 hover:text-zinc-600'}`;
@@ -248,6 +249,7 @@ const App: React.FC = () => {
                     onRescan={() => setCurrentView(AppView.FACE_SCANNER)}
                     onConsultAI={(q) => { setAiQuery(q); setShowAIAssistant(true); }}
                     onViewProgress={() => setCurrentView(AppView.PROFILE_SETUP)}
+                    onOpenRoutineBuilder={() => setCurrentView(AppView.ROUTINE_BUILDER)}
                     onLoginRequired={(reason) => openAuth(reason as AuthTrigger)}
                   />
               ) : null;
@@ -295,6 +297,14 @@ const App: React.FC = () => {
                     shelf={shelf}
                     onAddToShelf={handleAddToShelf}
                     onDiscard={handleDiscardProduct}
+                  />
+              ) : null;
+
+          case AppView.ROUTINE_BUILDER:
+              return userProfile ? (
+                  <PremiumRoutineBuilder 
+                      user={userProfile}
+                      onBack={() => setCurrentView(AppView.DASHBOARD)}
                   />
               ) : null;
 

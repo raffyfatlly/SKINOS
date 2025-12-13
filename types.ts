@@ -1,5 +1,4 @@
 
-
 export interface SkinMetrics {
   overallScore: number; // 0-100 (Higher is Better)
   skinAge?: number; // New: AI Estimated Skin Age
@@ -106,4 +105,5 @@ export enum AppView {
   SMART_SHELF = 'SMART_SHELF',
   PROFILE_SETUP = 'PROFILE_SETUP',
   BUYING_ASSISTANT = 'BUYING_ASSISTANT',
+  ROUTINE_BUILDER = 'ROUTINE_BUILDER', // New view for paid feature
 }

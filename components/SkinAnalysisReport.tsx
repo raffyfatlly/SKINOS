@@ -1,9 +1,9 @@
 
-// ... imports remain the same ...
+// ... (keep imports)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
-import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck, ChevronDown } from 'lucide-react';
+import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck, ChevronDown, Lock, Crown, ListChecks } from 'lucide-react';
 
 // --- SUB COMPONENTS ---
 
@@ -246,15 +246,6 @@ const getIngredientIcon = (name: string, action: string) => {
     return <Sparkles size={18} />;
 };
 
-interface RoutineRecommendation {
-    ingredients: string[];
-    benefit: string;
-    formulation: string;
-    vehicle: string;
-    actionType: string;
-    isFallback: boolean;
-}
-
 interface SkinAnalysisReportProps {
   userProfile: UserProfile;
   shelf: Product[];
@@ -262,9 +253,10 @@ interface SkinAnalysisReportProps {
   onConsultAI: (query: string) => void;
   onViewProgress?: () => void;
   onLoginRequired: (reason: string) => void;
+  onOpenRoutineBuilder: () => void;
 }
 
-const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, shelf, onRescan, onConsultAI, onViewProgress, onLoginRequired }) => {
+const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, shelf, onRescan, onConsultAI, onViewProgress, onLoginRequired, onOpenRoutineBuilder }) => {
   const metrics = userProfile.biometrics;
   const history = userProfile.scanHistory || [];
   const prevMetrics = history.length > 1 ? history[history.length - 2] : null;
@@ -272,10 +264,8 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
   const age = userProfile.age || 25; 
   
   const [selectedMetric, setSelectedMetric] = useState<keyof SkinMetrics | null>(null);
-  const [activeRoutineTab, setActiveRoutineTab] = useState<'AM' | 'PM'>('AM');
+  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false);
   const [complexity, setComplexity] = useState<'BASIC' | 'ADVANCED'>(userProfile.preferences?.complexity === 'ADVANCED' ? 'ADVANCED' : 'BASIC');
-  const [isStrategyDismissed, setIsStrategyDismissed] = useState(false);
-  const [isPrescriptionRevealed, setIsPrescriptionRevealed] = useState(false);
   const [isTreatmentExpanded, setIsTreatmentExpanded] = useState(false);
   
   const [isChartVisible, setIsChartVisible] = useState(false);
@@ -328,7 +318,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       const healthScore = (metrics.hydration + metrics.oiliness + metrics.redness + metrics.texture) / 4;
       const agingScore = (metrics.pigmentation + metrics.darkCircles + metrics.wrinkleFine + metrics.wrinkleDeep + metrics.sagging) / 5;
 
-      // Changed "Aging Signs" to "Vitality"
       const scores = [{ name: 'Blemishes', val: blemishScore }, { name: 'Skin Health', val: healthScore }, { name: 'Vitality', val: agingScore }].sort((a,b) => a.val - b.val);
       const lowestGroup = scores[0];
 
@@ -336,7 +325,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       if (metrics.analysisSummary) {
           summary = metrics.analysisSummary;
       } else {
-          // Robust Fallback Logic with Bolding
           if (lowestGroup.val > 80) {
               summary = "Your skin demonstrates excellent resilience. **Maintenance is your primary goal** to preserve barrier integrity and elasticity.";
           } else if (lowestGroup.name === 'Blemishes') {
@@ -365,7 +353,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       const diff = metrics.overallScore - prevMetrics.overallScore;
       const trend = Math.round(((metrics.overallScore - prevMetrics.overallScore) / prevMetrics.overallScore) * 100);
       
-      // Calculate specific metric changes
       const changes = [
           { name: 'Redness', val: metrics.redness - prevMetrics.redness },
           { name: 'Hydration', val: metrics.hydration - prevMetrics.hydration },
@@ -375,19 +362,16 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       
       const biggestChange = changes[0];
 
-      // Find products added between the two scan timestamps
       const newProducts = shelf.filter(p => p.dateScanned > prevMetrics.timestamp && p.dateScanned < metrics.timestamp);
       const latestProduct = newProducts.length > 0 ? newProducts[newProducts.length - 1] : null;
 
       let verdictText = "";
       let title = "";
       
-      // Changed threshold to < 5 (roughly 4%) to be more lenient on "stability"
       if (Math.abs(diff) < 5) {
           let status = "Steady";
           let color = "text-zinc-500 bg-zinc-50 border-zinc-200";
 
-          // Context-aware titles to avoid saying "Stable" when condition is bad
           if (metrics.overallScore > 80) {
               title = "Health Maintained";
               status = "Maintained";
@@ -410,7 +394,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       
       if (improved) {
           if (latestProduct && biggestChange.val > 0) {
-               // Attribution Logic
                verdictText = `The ${latestProduct.name} appears to be helping. ${biggestChange.name} has improved by +${Math.round(biggestChange.val)} points.`;
           } else {
                verdictText = `Routine is effective. ${biggestChange.name} shows the strongest improvement (+${Math.round(biggestChange.val)} points).`;
@@ -418,7 +401,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
           return { status: "Improving", trend, verdictTitle: title, verdictText, color: "text-emerald-700 bg-emerald-50 border-emerald-100" };
       } else {
            if (latestProduct && biggestChange.val < 0) {
-               // Negative Attribution
                verdictText = `Monitor ${latestProduct.name}. ${biggestChange.name} has dropped by ${Math.round(biggestChange.val)} points since adding it.`;
           } else {
                verdictText = `Regression detected. ${biggestChange.name} has worsened (-${Math.abs(Math.round(biggestChange.val))} points). Check routine for irritants.`;
@@ -458,7 +440,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
     }
 
     rankedConcerns.sort((a, b) => a.score - b.score);
-    // Expand concern list for advanced complexity
     const concernLimit = complexity === 'ADVANCED' ? 6 : 3;
     const topConcerns = rankedConcerns.slice(0, concernLimit);
 
@@ -485,12 +466,10 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
     const limit = complexity === 'ADVANCED' ? 8 : 4;
     let uniqueIngredients = ingredients.filter((v,i,a)=>a.findIndex(t=>(t.name===v.name))===i).slice(0, limit);
 
-    // --- CLINICAL SAFETY LAYER ---
     const isDehydrated = metrics.hydration < 45;
     const isSensitive = metrics.redness < 50;
 
     uniqueIngredients = uniqueIngredients.map(ing => {
-        // Hydration Safety Swaps
         if (isDehydrated) {
             if (ing.name === 'Glycolic Acid') return { name: 'Lactic Acid', action: 'Gentle exfoliation', context: 'Swapped from Glycolic due to low hydration.', isSafetySwap: true };
             if (ing.name === 'Salicylic Acid') return { name: 'Willow Bark', action: 'Natural pore cleansing', context: 'Swapped from BHA to prevent drying.', isSafetySwap: true };
@@ -499,7 +478,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
             if (ing.name === 'Clay') return { name: 'Enzyme Mask', action: 'Non-abrasive smoothing', context: 'Non-drying alternative to Clay.', isSafetySwap: true };
         }
         
-        // Sensitivity Safety Swaps
         if (isSensitive) {
             if (ing.name === 'Glycolic Acid' || ing.name === 'Lactic Acid') return { name: 'PHA', action: 'Sensitive skin renewal', context: 'Acid swapped for sensitive skin safety.', isSafetySwap: true };
             if (ing.name === 'Vitamin C') return { name: 'Magnesium Ascorbyl Phosphate', action: 'Gentle brightening', context: 'Non-stinging Vitamin C form.', isSafetySwap: true };
@@ -518,280 +496,19 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
     return { topConcerns, ingredients: uniqueIngredients, avoid, hasSafetySwaps: uniqueIngredients.some(i => i.isSafetySwap) };
   }, [metrics, complexity, userProfile.preferences]);
 
-  const routinePlan = useMemo(() => {
-    const plan: Record<string, RoutineRecommendation> = {};
-    const usedIngredients = new Set<string>();
-
-    const vehicleMap: Record<string, string[]> = {
-        'CLEANSER': ['Salicylic Acid', 'Benzoyl Peroxide', 'Glycolic Acid', 'Lactic Acid', 'BHA', 'AHA', 'Tea Tree', 'Oat', 'Centella', 'Willow Bark', 'Sulfur', 'Panthenol', 'Niacinamide', 'Ceramides', 'Green Tea', 'Zinc'],
-        'TONER': ['Glycolic Acid', 'Salicylic Acid', 'Lactic Acid', 'BHA', 'AHA', 'Centella', 'Green Tea', 'Hyaluronic Acid', 'PHA', 'Willow Bark', 'Panthenol', 'Niacinamide'],
-        'SERUM': ['Retinol', 'Retinal', 'Vitamin C', 'Niacinamide', 'Tranexamic Acid', 'Alpha Arbutin', 'Peptides', 'Copper Peptides', 'Azelaic Acid', 'Hyaluronic Acid', 'Growth Factors', 'Bakuchiol', 'Magnesium Ascorbyl Phosphate', 'Centella', 'Panthenol', 'Polyglutamic Acid'],
-        'MOISTURIZER': ['Ceramides', 'Urea', 'Peptides', 'Centella', 'Panthenol', 'Squalane', 'Hyaluronic Acid', 'Retinol', 'Niacinamide', 'Salicylic Acid', 'Vitamin C', 'Azelaic Acid', 'Bakuchiol', 'Green Tea', 'Oat'],
-        'SPF': ['Zinc Oxide', 'Titanium Dioxide', 'Vitamin C', 'Niacinamide', 'Ceramides', 'Hyaluronic Acid', 'Centella'],
-        'TREATMENT': ['Benzoyl Peroxide', 'Salicylic Acid', 'Adapalene', 'Azelaic Acid', 'Retinol', 'Tretinoin', 'Sulfur', 'Willow Bark']
-    };
-
-    const supportiveIngredients: Record<string, string[]> = {
-        'CLEANSER': ['Glycerin', 'Prebiotics', 'Panthenol', 'Oat', 'Green Tea'],
-        'TONER': ['Hyaluronic Acid', 'Rose Water', 'Chamomile'],
-        'SERUM': ['Peptides', 'Ceramides', 'Vitamin E'],
-        'MOISTURIZER': ['Squalane', 'Shea Butter', 'Allantoin', 'Ceramides'],
-        'SPF': ['Antioxidants', 'Aloe Vera'],
-        'TREATMENT': ['Sulfur', 'Zinc']
-    };
-
-    const getFormulation = (step: string): string => {
-        const isOily = metrics.oiliness < 50;
-        const isDry = metrics.hydration < 55 || metrics.oiliness > 80;
-        const isSensitive = metrics.redness < 60;
-
-        switch(step) {
-            case 'CLEANSER':
-                if (isOily) return "Foaming Gel";
-                if (isDry) return "Milky Lotion";
-                if (isSensitive) return "Fragrance-Free Gel";
-                return "Gentle Gel";
-            case 'TONER':
-                if (isOily) return "Light Liquid";
-                if (isDry) return "Milky Essence";
-                return "Hydrating Mist";
-            case 'SERUM':
-                if (isOily) return "Water-based";
-                if (isDry) return "Oil-in-Water Emulsion";
-                return "Lightweight Fluid";
-            case 'MOISTURIZER':
-                if (isOily) return "Gel-Cream";
-                if (isDry) return "Rich Cream or Balm";
-                return "Light Cream";
-            case 'SPF':
-                if (isOily) return "Matte / Oil-Free";
-                if (isSensitive) return "Mineral (Zinc Based)";
-                return "Invisible Finish";
-            case 'TREATMENT':
-                return "Spot Gel";
-            default: return "Standard";
-        }
-    };
-
-    const sortedActiveNeeds = [...prescription.ingredients]; 
-
-    // DYNAMIC SLOTS based on Complexity
-    let slotsToFill: { key: string, type: string, time: 'AM' | 'PM' }[] = [];
-
-    const isVeryOily = metrics.oiliness < 45;
-
-    if (complexity === 'BASIC') {
-        slotsToFill = [
-             { key: 'SERUM_AM', type: 'SERUM', time: 'AM' }, 
-             { key: 'SPF_AM', type: 'SPF', time: 'AM' },
-             { key: 'CLEANSER_PM', type: 'CLEANSER', time: 'PM' }, 
-             { key: 'CLEANSER_AM', type: 'CLEANSER', time: 'AM' }
-        ];
-
-        if (isVeryOily) {
-             slotsToFill.push({ key: 'SERUM_PM', type: 'SERUM', time: 'PM' });
-        } else {
-             slotsToFill.push({ key: 'MOISTURIZER_PM', type: 'MOISTURIZER', time: 'PM' });
-        }
-    } else {
-        slotsToFill = [
-            { key: 'SERUM_PM', type: 'SERUM', time: 'PM' }, 
-            { key: 'TREATMENT_PM', type: 'TREATMENT', time: 'PM' }, 
-            { key: 'SERUM_AM', type: 'SERUM', time: 'AM' }, 
-            { key: 'MOISTURIZER_PM', type: 'MOISTURIZER', time: 'PM' },
-            { key: 'TONER_PM', type: 'TONER', time: 'PM' },
-            { key: 'TONER_AM', type: 'TONER', time: 'AM' },
-            { key: 'SPF_AM', type: 'SPF', time: 'AM' },
-            { key: 'CLEANSER_PM', type: 'CLEANSER', time: 'PM' },
-            { key: 'CLEANSER_AM', type: 'CLEANSER', time: 'AM' }
-        ];
-    }
-
-    slotsToFill.forEach(slot => {
-        const formulation = getFormulation(slot.type);
-
-        let primary = sortedActiveNeeds.find(p => {
-            const fitsVehicle = vehicleMap[slot.type]?.some(v => p.name.includes(v));
-            if (!fitsVehicle) return false;
-
-            const isPMOnly = ['Retinol', 'Retinal', 'Growth Factors', 'Glycolic Acid', 'AHA', 'Tretinoin', 'Bakuchiol'].some(x => p.name.includes(x));
-            const isAMOnly = ['Vitamin C', 'SPF'].some(x => p.name.includes(x));
-            if (slot.time === 'AM' && isPMOnly) return false;
-            if (slot.time === 'PM' && isAMOnly) return false;
-
-            return !usedIngredients.has(p.name);
-        });
-
-        if (primary) {
-            usedIngredients.add(primary.name);
-            const alternatives = vehicleMap[slot.type]?.filter(n => n !== primary?.name).slice(0, 2) || [];
-            
-            plan[slot.key] = {
-                ingredients: [primary.name, ...alternatives],
-                vehicle: slot.type,
-                formulation: formulation,
-                benefit: `Goal: ${primary.action.replace(/\.$/, '')}`,
-                actionType: slot.type === 'CLEANSER' ? 'Wash-off Active' : 'Leave-on Active',
-                isFallback: false
-            };
-        } else {
-            let fallbackBenefit = "Maintenance";
-            let fallbackIngs = supportiveIngredients[slot.type] || ['Glycerin'];
-            
-            if (slot.type === 'CLEANSER') {
-                const isOily = metrics.oiliness < 50;
-                fallbackBenefit = isOily ? 'Oil Control' : 'Gentle Cleansing';
-                if (isOily) fallbackIngs = ['Tea Tree', 'Clay']; 
-                else if (metrics.hydration < 55) fallbackIngs = ['Glycerin', 'Oat']; // Specific for dry skin
-            }
-            else if (slot.type === 'TONER') fallbackBenefit = 'pH Balance';
-            else if (slot.type === 'SERUM') fallbackBenefit = slot.time === 'AM' ? 'Antioxidant Protection' : 'Repair & Recovery';
-            else if (slot.type === 'MOISTURIZER') {
-                fallbackBenefit = 'Barrier Support';
-                if (metrics.hydration < 50) fallbackIngs = ['Ceramides', 'Squalane'];
-            }
-            else if (slot.type === 'SPF') fallbackBenefit = 'UV Defense';
-            else if (slot.type === 'TREATMENT') fallbackBenefit = 'Targeted Correction';
-
-            plan[slot.key] = {
-                ingredients: fallbackIngs,
-                vehicle: slot.type,
-                formulation: formulation,
-                benefit: fallbackBenefit,
-                actionType: 'Key Ingredient', // Updated label from 'Essential Base'
-                isFallback: true
-            };
-        }
-    });
-
-    return plan;
-  }, [prescription, metrics, complexity]);
-
-  const findBestMatch = (type: string, stepName: string) => {
-      let candidates = shelf.filter(p => {
-          if (type === 'CLEANSER') return p.type === 'CLEANSER';
-          if (type === 'TONER') return p.type === 'TONER';
-          if (type === 'SERUM') return p.type === 'SERUM' || p.type === 'TREATMENT';
-          if (type === 'TREATMENT') return p.type === 'TREATMENT' || p.type === 'SERUM';
-          if (type === 'MOISTURIZER') return p.type === 'MOISTURIZER';
-          if (type === 'SPF') return p.type === 'SPF' || (p.type === 'MOISTURIZER' && p.name.toLowerCase().includes('spf'));
-          return false;
-      });
-
-      if (candidates.length === 0) return null;
-
-      const scored = candidates.map(p => {
-          const audit = auditProduct(p, userProfile);
-          let score = audit.adjustedScore;
-          const hasPrescribed = prescription.ingredients.some(i => p.ingredients.join(' ').toLowerCase().includes(i.name.toLowerCase()));
-          if (hasPrescribed) score += 15;
-          return { product: p, score, audit, hasPrescribed };
-      });
-
-      scored.sort((a,b) => b.score - a.score);
-      return scored[0];
-  };
-
-  const RoutineStep = ({ step, type, time }: { step: string, type: string, time: 'AM' | 'PM' }) => {
-      const match = findBestMatch(type, step);
-      const planKey = `${type}_${time}`;
-      const rec = routinePlan[planKey] || { ingredients: ['Recommended'], vehicle: type, formulation: 'Standard', benefit: 'Care', actionType: 'Standard', isFallback: true };
-
-      return (
-          <div className="modern-card rounded-[1.5rem] p-6 relative transition-all hover:scale-[1.01] hover:-translate-y-1 hover:shadow-xl duration-300 animate-in slide-in-from-bottom-2 group cursor-default">
-               <div className="flex justify-between items-start mb-4">
-                   <div className="flex items-center gap-3">
-                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest bg-zinc-50 px-2 py-1 rounded-md border border-zinc-100 group-hover:bg-zinc-900 group-hover:text-white transition-colors duration-300">
-                         {step} • <span className="font-black group-hover:text-white text-zinc-700">{type}</span>
-                       </span>
-                       {match?.hasPrescribed && match.audit.warnings.length === 0 && (
-                           <span className="pulse-ring text-[10px] font-bold text-teal-600 flex items-center gap-1 bg-teal-50 px-2 py-1 rounded-md">
-                               <Sparkles size={10} /> Smart Choice
-                           </span>
-                       )}
-                   </div>
-                   {match && (
-                       <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold tracking-wide ${match.audit.warnings.length > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                           {match.audit.warnings.length > 0 ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
-                           {match.audit.adjustedScore}% Match
-                       </div>
-                   )}
-               </div>
-
-               {match ? (
-                   <div>
-                       <h4 className="font-bold text-sm text-zinc-900 truncate leading-tight tracking-tight">{match.product.name}</h4>
-                       <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest mb-4">{match.product.brand || 'Unknown Brand'}</p>
-                       <div className="text-[11px] p-3 bg-zinc-50 rounded-xl text-zinc-600 font-medium border border-zinc-100">
-                           {match.audit.warnings.length > 0 ? (
-                               <p className="text-rose-600 font-bold flex gap-2 items-center"><Ban size={12}/> {match.audit.warnings[0].reason}</p>
-                           ) : (
-                               <p className="flex gap-2 items-center">
-                                   <BrainCircuit size={12} className="text-teal-500 shrink-0" />
-                                   {match.hasPrescribed ? `Contains prescribed ${prescription.ingredients.find(i => match.product.ingredients.join(' ').toLowerCase().includes(i.name.toLowerCase()))?.name || 'actives'}.` : `Safe, effective formula.`}
-                               </p>
-                           )}
-                       </div>
-                   </div>
-               ) : (
-                   <div className="border border-dashed border-zinc-200 rounded-xl p-5 bg-zinc-50/50 hover:bg-zinc-50 transition-colors group-hover:border-teal-200 group-hover:bg-teal-50/30">
-                       <div className="flex items-center gap-2 mb-4 tech-reveal">
-                           <div className="w-6 h-6 rounded-full bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0 text-teal-500">
-                              <Target size={12} />
-                           </div>
-                           <span className="text-[10px] font-bold uppercase tracking-widest text-teal-700">{rec.benefit}</span>
-                       </div>
-                       
-                       <div className="grid grid-cols-2 gap-4 mb-4">
-                           {/* Key Active Section - Now Shows Supportive Ingredients even if Fallback */}
-                           <div className="tech-reveal delay-100">
-                               <span className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Key Ingredient</span>
-                               <div className="text-sm font-black text-zinc-900 tracking-tight flex items-center gap-2">
-                                   {rec.ingredients[0]}
-                               </div>
-                           </div>
-
-                           <div className="tech-reveal delay-200">
-                               <span className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Recommended Formula</span>
-                               <div className="text-sm font-bold text-zinc-700 tracking-tight flex items-center gap-2">
-                                   {rec.formulation}
-                               </div>
-                           </div>
-                       </div>
-                       
-                       <div className="pt-3 border-t border-zinc-200/50 flex items-center justify-between tech-reveal delay-300">
-                            <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-bold text-zinc-400 uppercase">Or try:</span>
-                                <div className="flex flex-wrap gap-1">
-                                    {rec.ingredients.slice(1).map((alt, i) => (
-                                        <span key={i} className="text-[9px] font-medium text-zinc-500 bg-white px-1.5 py-0.5 rounded border border-zinc-100">{alt}</span>
-                                    ))}
-                                </div>
-                            </div>
-                            <span className="text-[9px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">{rec.actionType}</span>
-                       </div>
-                   </div>
-               )}
-          </div>
-      )
-  };
-
   const priorityColor = groupAnalysis.priorityScore > 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-rose-600 bg-rose-50 border-rose-100';
   const priorityLabel = groupAnalysis.priorityScore > 80 ? 'Maintenance' : 'Focus';
 
-  // LOGIC FOR CLINICAL VERDICT TAG
   const isAnonymous = userProfile.isAnonymous;
   const hasHistory = userProfile.scanHistory && userProfile.scanHistory.length > 1;
 
   let verdictTagText = "";
   let verdictTagColor = "";
-  // Explicitly type to allow React Fragment or Array
   let verdictBodyText: React.ReactNode = renderVerdict(groupAnalysis.summaryText);
 
   if (isAnonymous) {
       verdictTagText = "BASELINE SET";
       verdictTagColor = "bg-zinc-100 text-zinc-600 border-zinc-200";
-      // Enhance body text for guest
       verdictBodyText = (
           <>
             {verdictBodyText} <span className="block mt-2 font-medium italic text-teal-600/80">Rescan regularly to build a clinical history and unlock trend analysis.</span>
@@ -801,7 +518,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
        verdictTagText = "BASELINE ESTABLISHED";
        verdictTagColor = "bg-zinc-100 text-zinc-600 border-zinc-200";
   } else {
-       // Registered user with history
        const status = progressVerdict.status.toUpperCase();
        verdictTagText = status;
        
@@ -816,7 +532,6 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
   }
 
   const handleRescan = () => {
-      // Check if user is anonymous before allowing rescan
       if (userProfile.isAnonymous) {
           onLoginRequired('RESCAN_FACE');
       } else {
@@ -849,9 +564,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                     {userProfile.isAnonymous ? "Save to Rescan" : "Rescan"}
                  </button>
 
-                 {/* DYNAMIC PROGRESS VERDICT UI */}
                  <div className="absolute bottom-0 left-0 right-0 p-8 text-white z-10">
-                     {/* Mini Stat Row - Moved up since text is gone, kept simple */}
                      <div className="flex gap-6 border-t border-white/10 pt-4 tech-reveal delay-100">
                         <div>
                              <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Score</span>
@@ -975,235 +688,219 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
              </GroupSection>
         </div>
 
-        {/* PRESCRIPTION PROTOCOL CARD - REVEAL INTERACTION */}
+        {/* PREMIUM INTELLIGENCE HUB (New Replacement for Analysis Complete) */}
         <div 
-            className="rounded-[2.5rem] animate-in slide-in-from-bottom-8 duration-700 delay-500 shadow-2xl shadow-teal-900/10 relative overflow-hidden group p-8 min-h-[400px] flex flex-col justify-center transition-all"
+            className="rounded-[2.5rem] p-8 shadow-xl relative overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-500"
             style={{ backgroundColor: 'rgb(163, 206, 207)' }}
         >
              {/* Decorative Background */}
-             <div className="absolute top-0 right-0 w-96 h-96 bg-white/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none mix-blend-overlay animate-pulse"></div>
-             <div className="absolute bottom-0 left-0 w-72 h-72 bg-teal-900/5 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
+             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
+             <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none mix-blend-overlay"></div>
 
-             {!isPrescriptionRevealed ? (
-                 <div className="relative z-10 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-500">
-                      <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md mb-8 relative border border-white/20 shadow-inner">
-                          <div className="absolute inset-0 bg-white/20 rounded-full animate-ping duration-1000"></div>
-                          <Fingerprint size={48} className="text-white drop-shadow-sm" strokeWidth={1.5} />
+             {!isPremiumUnlocked ? (
+                 <div className="text-center relative z-10 py-4">
+                      {/* Premium Teaser Icon */}
+                      <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto mb-6 border border-white/30 shadow-inner">
+                          <Lock className="text-white drop-shadow-sm" size={32} strokeWidth={2.5} />
                       </div>
                       
-                      <h3 className="text-3xl font-black text-white mb-3 tracking-tighter drop-shadow-md">Analysis Complete</h3>
-                      <p className="text-white font-bold text-sm mb-10 max-w-[280px] mx-auto leading-relaxed drop-shadow-sm opacity-95">
-                          We've analyzed your biometrics and identified {prescription.ingredients.length} active ingredients that target your specific needs.
+                      <h2 className="text-3xl font-black text-white mb-2 tracking-tight drop-shadow-md">Unlock Your Routine</h2>
+                      
+                      {/* Enticing Value Prop - Updated Copy */}
+                      <p className="text-white/95 font-medium text-sm mb-8 max-w-xs mx-auto leading-relaxed drop-shadow-sm">
+                         We've identified the best products for your unique skin profile. Get a personalized routine and curated product plan built just for you.
                       </p>
                       
-                      <button 
-                        onClick={() => setIsPrescriptionRevealed(true)}
-                        className="group relative px-10 py-5 bg-white text-teal-700 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-[0_0_30px_rgba(255,255,255,0.5)] hover:shadow-[0_0_50px_rgba(255,255,255,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 overflow-hidden"
-                      >
-                          <span className="relative z-10 flex items-center gap-2">
-                             Reveal Formula <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                          </span>
-                      </button>
+                      {/* Feature List (Updated Tags) */}
+                      <div className="flex flex-wrap justify-center gap-2 mb-8 max-w-sm mx-auto opacity-90">
+                          {["Routine Architect", "Unlimited Rescans", "Smart Search", "Product Swaps", "Priority Access"].map((feat, i) => (
+                              <span key={i} className="px-2 py-1 bg-white/10 rounded-md text-[9px] font-bold text-white uppercase tracking-wider border border-white/10">
+                                  {feat}
+                              </span>
+                          ))}
+                      </div>
+
+                      {/* Unlock Button - ANIMATED */}
+                      <div className="relative inline-flex group rounded-full p-[2px] overflow-hidden shadow-[0_10px_20px_rgba(0,0,0,0.1)]">
+                          <div className="absolute inset-[-100%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2E8F0_0%,#E2E8F0_50%,#0F766E_100%)]" />
+                          <button 
+                            onClick={() => setIsPremiumUnlocked(true)}
+                            className="relative z-10 bg-white text-teal-900 px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                          >
+                              <Sparkles size={14} className="text-amber-400 fill-amber-400 group-hover:rotate-12 transition-transform" /> Unlock Full Access
+                          </button>
+                      </div>
+                      <p className="text-[10px] text-white/80 font-bold mt-4 uppercase tracking-widest">RM 9.90 • One-time Payment</p>
                  </div>
              ) : (
-                 <div className="relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    <div className="flex justify-between items-start mb-8">
-                        <div>
-                            <h4 className="text-[10px] font-bold text-white uppercase tracking-widest mb-2 flex items-center gap-2 opacity-90 animate-in slide-in-from-left-4 duration-500 delay-100">
-                                <Search size={14} className="text-white" /> Recommended for You
-                            </h4>
-                            <h2 className="text-2xl font-black text-white tracking-tight leading-none animate-in slide-in-from-left-4 duration-500 delay-200 drop-shadow-sm">Power Ingredients</h2>
-                            <p className="text-sm text-white font-medium mt-1 opacity-95 animate-in slide-in-from-left-4 duration-500 delay-300">Look for these ingredients on product labels.</p>
+                 <div className="relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                      {/* Header */}
+                      <div className="flex justify-between items-start mb-8">
+                          <div>
+                              <h3 className="text-[10px] font-bold text-white/90 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                 <Sparkles size={12} className="text-white" /> Premium Report
+                              </h3>
+                              <h2 className="text-3xl font-black text-white tracking-tight drop-shadow-md">Power Ingredients</h2>
+                          </div>
+                          <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
+                              <span className="text-[10px] font-bold text-white uppercase tracking-widest">Unlocked</span>
+                          </div>
+                      </div>
+
+                      {/* Revealed Ingredients Grid */}
+                      <div className="grid grid-cols-2 gap-3 mb-8">
+                          {prescription.ingredients.map((ing, i) => (
+                              <div key={i} className="bg-white/20 backdrop-blur-md border border-white/30 p-4 rounded-2xl flex flex-col justify-center animate-in zoom-in slide-in-from-bottom-4" style={{ animationDelay: `${i * 100}ms` }}>
+                                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-teal-600 mb-2 shadow-sm">
+                                      {getIngredientIcon(ing.name, ing.action)}
+                                  </div>
+                                  <span className="text-white font-bold text-sm block leading-tight mb-0.5">{ing.name}</span>
+                                  <span className="text-white/80 text-[10px] font-medium leading-tight">{ing.action}</span>
+                              </div>
+                          ))}
+                      </div>
+
+                      {/* Avoid List */}
+                      {prescription.avoid.length > 0 && (
+                        <div className="mb-8 p-4 bg-white/10 rounded-2xl border border-white/10 flex items-start gap-3">
+                             <Ban size={16} className="text-white mt-0.5 shrink-0" />
+                             <div>
+                                 <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest block mb-1">Avoid for now</span>
+                                 <p className="text-xs text-white font-medium leading-relaxed">
+                                     {prescription.avoid.join(', ')}
+                                 </p>
+                             </div>
                         </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {prescription.ingredients.map((ing, i) => (
-                            <div key={i} className="bg-white/95 backdrop-blur-md rounded-2xl p-4 text-center shadow-lg transition-transform hover:scale-105 duration-300 animate-in zoom-in slide-in-from-bottom-8 flex flex-col items-center justify-center relative overflow-hidden fill-mode-backwards" style={{ animationDelay: `${400 + (i * 300)}ms` }}>
-                                
-                                {ing.isSafetySwap && (
-                                    <div className="absolute top-0 left-0 right-0 bg-amber-50 py-1 text-[8px] font-bold text-amber-600 uppercase tracking-widest">
-                                        Gentle Option
+                      )}
+
+                      {/* Prominent Launch Architect CTA - SLEEK ACTION CARD DESIGN */}
+                      <button 
+                        onClick={onOpenRoutineBuilder}
+                        className="w-full group relative overflow-hidden rounded-[2rem] p-6 text-left transition-all hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                           {/* Background Gradients */}
+                           <div className="absolute inset-0 bg-gradient-to-br from-teal-400 to-emerald-500"></div>
+                           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+                           <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+
+                           {/* Content */}
+                           <div className="relative z-10 flex items-center justify-between">
+                              <div>
+                                 <div className="flex items-center gap-2 mb-1.5 opacity-90">
+                                    <div className="px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-md border border-white/20 text-[9px] font-bold uppercase tracking-widest text-white flex items-center gap-1.5">
+                                        <Crown size={10} /> Premium Feature
                                     </div>
-                                )}
-
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 mt-2 ${ing.isSafetySwap ? 'bg-amber-100 text-amber-600' : 'bg-teal-50 text-teal-600'}`}>
-                                    {getIngredientIcon(ing.name, ing.action)}
-                                </div>
-                                
-                                <h5 className="font-bold text-sm text-zinc-900 leading-tight mb-1">{ing.name}</h5>
-                                <span className="text-[10px] font-medium tracking-wide text-zinc-500 block leading-tight px-1">{ing.action}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* INGREDIENTS TO AVOID */}
-                    {prescription.avoid.length > 0 && (
-                        <div className="mt-6 pt-6 border-t border-white/30 animate-in fade-in duration-700 delay-1000">
-                            <div className="flex items-start gap-3 opacity-90">
-                                 <div className="mt-0.5">
-                                    <Ban size={14} className="text-white" />
                                  </div>
-                                 <div>
-                                     <span className="text-[10px] font-bold text-white uppercase tracking-widest block mb-1">Avoid for now</span>
-                                     <p className="text-xs text-white font-medium leading-relaxed">
-                                         {prescription.avoid.join(', ')}
-                                     </p>
-                                 </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                                 <h3 className="text-2xl font-black text-white tracking-tight drop-shadow-sm mb-1">
+                                     Launch Architect
+                                 </h3>
+                                 <p className="text-white/90 text-xs font-bold flex items-center gap-2">
+                                     3-Tier Product Plan: Budget • Value • Luxury
+                                 </p>
+                              </div>
+                              
+                              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                 <ArrowRight size={20} className="text-teal-600" />
+                              </div>
+                           </div>
+                      </button>
+                 </div>
              )}
         </div>
 
-        <div className="pt-8 animate-in slide-in-from-bottom-8 duration-700 delay-700 relative">
-            <div className="absolute top-24 bottom-12 left-[2.25rem] w-px bg-zinc-200 z-0 hidden sm:block origin-top animate-[scaleY_1s_ease-out_forwards] delay-700" style={{ transform: 'scaleY(0)', animationFillMode: 'forwards' }}></div>
-
-            <div className="flex justify-between items-center mb-8 px-2 tech-reveal">
-                <div>
-                    <h2 className="text-3xl font-black text-zinc-900 tracking-tight">Daily Routine</h2>
-                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mt-1.5">
-                        {complexity} PLAN • {activeRoutineTab}
-                    </p>
+        {/* CLINICAL MENU SECTION (Renamed to Treatment for You) */}
+        {/* FIXED: Removed scale-[1.01] on expand to prevent layout shift glitches */}
+        <div 
+            className={`modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 cursor-pointer transition-all duration-500 group border-zinc-100
+            ${isTreatmentExpanded ? 'bg-white shadow-xl' : 'bg-gradient-to-br from-white to-zinc-50 hover:bg-white hover:border-teal-200'}`}
+            onClick={() => setIsTreatmentExpanded(!isTreatmentExpanded)}
+        >
+                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors duration-500 ${isTreatmentExpanded ? 'bg-teal-600 text-white shadow-lg shadow-teal-200' : 'bg-teal-50 text-teal-600 group-hover:bg-teal-100'}`}>
+                            <Syringe size={22} strokeWidth={isTreatmentExpanded ? 2.5 : 2} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-zinc-900 tracking-tight leading-none mb-1">Clinical Treatments</h3>
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest group-hover:text-teal-600 transition-colors">Targeting {groupAnalysis.priorityCategory}</p>
+                    </div>
                 </div>
-                <div className="flex bg-white border border-zinc-100 rounded-full p-1 gap-1 shadow-sm">
-                    <button onClick={() => setActiveRoutineTab('AM')} className={`p-3 rounded-full transition-all ${activeRoutineTab === 'AM' ? 'bg-amber-50 text-amber-500 shadow-sm' : 'text-zinc-300 hover:text-zinc-500'}`}><Sun size={20} /></button>
-                    <button onClick={() => setActiveRoutineTab('PM')} className={`p-3 rounded-full transition-all ${activeRoutineTab === 'PM' ? 'bg-indigo-50 text-indigo-500 shadow-sm' : 'text-zinc-300 hover:text-zinc-500'}`}><Moon size={20} /></button>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${isTreatmentExpanded ? 'bg-zinc-100 rotate-180 text-zinc-900' : 'text-zinc-300 group-hover:translate-y-1'}`}>
+                        <ChevronDown size={20} />
                 </div>
-            </div>
+                </div>
 
-            <div className="flex justify-center mb-10 tech-reveal delay-100">
-                 <div className="inline-flex bg-white border border-zinc-100 rounded-2xl p-1.5 shadow-sm">
-                     <button onClick={() => setComplexity('BASIC')} className={`px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${complexity === 'BASIC' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-600'}`}>Essential</button>
-                     <button onClick={() => setComplexity('ADVANCED')} className={`px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${complexity === 'ADVANCED' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-600'}`}>Complete</button>
-                 </div>
-            </div>
-
-            <div className="space-y-5 relative mb-12">
-                {activeRoutineTab === 'AM' ? (
-                    <>
-                        <RoutineStep step="01" type="CLEANSER" time="AM" />
-                        {complexity === 'ADVANCED' && <RoutineStep step="02" type="TONER" time="AM" />}
-                        <RoutineStep step={complexity === 'ADVANCED' ? "03" : "02"} type="SERUM" time="AM" />
-                        <RoutineStep step={complexity === 'ADVANCED' ? "04" : "03"} type="SPF" time="AM" />
-                    </>
-                ) : (
-                    <>
-                         {complexity === 'ADVANCED' && <RoutineStep step="01" type="CLEANSER" time="PM" />} 
-                         <RoutineStep step={complexity === 'ADVANCED' ? "02" : "01"} type="CLEANSER" time="PM" />
-                         {complexity === 'ADVANCED' && <RoutineStep step="03" type="TONER" time="PM" />}
-                         <RoutineStep step={complexity === 'ADVANCED' ? "04" : "02"} type="SERUM" time="PM" />
-                         {complexity === 'ADVANCED' && <RoutineStep step="05" type="TREATMENT" time="PM" />}
-                         {complexity === 'ADVANCED' && <RoutineStep step="06" type="MOISTURIZER" time="PM" />}
-                         
-                         {/* Dynamic rendering for Basic PM step */}
-                         {complexity === 'BASIC' && (
-                             // If a moisturizer slot was created (because skin isn't oily), render it.
-                             // Otherwise, the slot will be for SERUM_PM.
-                             routinePlan['MOISTURIZER_PM'] ? (
-                                <RoutineStep step="03" type="MOISTURIZER" time="PM" />
-                             ) : (
-                                <RoutineStep step="03" type="SERUM" time="PM" />
-                             )
-                         )}
-                    </>
+                {!isTreatmentExpanded && (
+                <div className="mt-5 pt-5 border-t border-zinc-100/50 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <p className="text-xs text-zinc-500 font-medium leading-relaxed mb-4">
+                        Professional, non-invasive procedures recommended to accelerate your {groupAnalysis.priorityCategory.toLowerCase()} progress.
+                        </p>
+                        
+                        <div className="flex items-center justify-between">
+                            <div className="flex -space-x-2">
+                                {clinicalSuggestions.map((s, i) => (
+                                    <div key={i} className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${s.type === 'LASER' ? 'bg-rose-50 text-rose-500' : s.type === 'FACIAL' ? 'bg-sky-50 text-sky-500' : 'bg-violet-50 text-violet-500'}`}>
+                                        {s.type === 'LASER' ? <Zap size={10} /> : s.type === 'FACIAL' ? <Sparkles size={10} /> : <Activity size={10} />}
+                                    </div>
+                                ))}
+                            </div>
+                            <span className="text-[10px] font-bold text-teal-600 bg-white border border-teal-100 px-3 py-1.5 rounded-full group-hover:bg-teal-50 transition-colors flex items-center gap-1.5 shadow-sm">
+                            View Options <ArrowRight size={10} />
+                            </span>
+                    </div>
+                </div>
                 )}
-            </div>
 
-            {/* CLINICAL MENU SECTION (Renamed to Treatment for You) */}
-            <div 
-                className={`modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 cursor-pointer transition-all duration-500 group border-zinc-100
-                ${isTreatmentExpanded ? 'bg-white shadow-xl scale-[1.01]' : 'bg-gradient-to-br from-white to-zinc-50 hover:bg-white hover:border-teal-200'}`}
-                onClick={() => setIsTreatmentExpanded(!isTreatmentExpanded)}
-            >
-                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors duration-500 ${isTreatmentExpanded ? 'bg-teal-600 text-white shadow-lg shadow-teal-200' : 'bg-teal-50 text-teal-600 group-hover:bg-teal-100'}`}>
-                             <Syringe size={22} strokeWidth={isTreatmentExpanded ? 2.5 : 2} />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-black text-zinc-900 tracking-tight leading-none mb-1">Clinical Treatments</h3>
-                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest group-hover:text-teal-600 transition-colors">Targeting {groupAnalysis.priorityCategory}</p>
-                        </div>
+                {isTreatmentExpanded && (
+                    <div className="space-y-3 mt-8 animate-in slide-in-from-top-4 duration-500 cursor-default" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-4 bg-zinc-50 rounded-2xl mb-4 border border-zinc-100">
+                        <p className="text-xs text-zinc-500 leading-relaxed">
+                            <span className="font-bold text-zinc-900">AI Recommendation:</span> Based on your {groupAnalysis.priorityCategory.toLowerCase()} score of {Math.round(groupAnalysis.priorityScore)}, these professional treatments could accelerate results.
+                        </p>
                     </div>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${isTreatmentExpanded ? 'bg-zinc-100 rotate-180 text-zinc-900' : 'text-zinc-300 group-hover:translate-y-1'}`}>
-                         <ChevronDown size={20} />
-                    </div>
-                 </div>
 
-                 {!isTreatmentExpanded && (
-                    <div className="mt-5 pt-5 border-t border-zinc-100/50 opacity-80 group-hover:opacity-100 transition-opacity">
-                         <p className="text-xs text-zinc-500 font-medium leading-relaxed mb-4">
-                            Professional, non-invasive procedures recommended to accelerate your {groupAnalysis.priorityCategory.toLowerCase()} progress.
-                         </p>
-                         
-                         <div className="flex items-center justify-between">
-                             <div className="flex -space-x-2">
-                                 {clinicalSuggestions.map((s, i) => (
-                                     <div key={i} className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${s.type === 'LASER' ? 'bg-rose-50 text-rose-500' : s.type === 'FACIAL' ? 'bg-sky-50 text-sky-500' : 'bg-violet-50 text-violet-500'}`}>
-                                         {s.type === 'LASER' ? <Zap size={10} /> : s.type === 'FACIAL' ? <Sparkles size={10} /> : <Activity size={10} />}
-                                     </div>
-                                 ))}
-                             </div>
-                             <span className="text-[10px] font-bold text-teal-600 bg-white border border-teal-100 px-3 py-1.5 rounded-full group-hover:bg-teal-50 transition-colors flex items-center gap-1.5 shadow-sm">
-                                View Options <ArrowRight size={10} />
-                             </span>
-                        </div>
-                    </div>
-                 )}
+                    {clinicalSuggestions.map((treatment, idx) => {
+                        const isLaser = treatment.type === 'LASER';
+                        const isFacial = treatment.type === 'FACIAL';
+                        const colorClass = isLaser ? 'text-rose-500 bg-rose-50 border-rose-100' : isFacial ? 'text-sky-500 bg-sky-50 border-sky-100' : 'text-violet-500 bg-violet-50 border-violet-100';
 
-                 {isTreatmentExpanded && (
-                     <div className="space-y-3 mt-8 animate-in slide-in-from-top-4 duration-500 cursor-default" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-4 bg-zinc-50 rounded-2xl mb-4 border border-zinc-100">
-                            <p className="text-xs text-zinc-500 leading-relaxed">
-                                <span className="font-bold text-zinc-900">AI Recommendation:</span> Based on your {groupAnalysis.priorityCategory.toLowerCase()} score of {Math.round(groupAnalysis.priorityScore)}, these professional treatments could accelerate results.
-                            </p>
-                        </div>
-
-                        {clinicalSuggestions.map((treatment, idx) => {
-                            const isLaser = treatment.type === 'LASER';
-                            const isFacial = treatment.type === 'FACIAL';
-                            const colorClass = isLaser ? 'text-rose-500 bg-rose-50 border-rose-100' : isFacial ? 'text-sky-500 bg-sky-50 border-sky-100' : 'text-violet-500 bg-violet-50 border-violet-100';
-
-                            return (
-                                <div key={idx} className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-zinc-100 flex flex-col sm:flex-row gap-5 transition-all hover:border-teal-200 hover:shadow-md group/card">
-                                    <div className="flex items-start justify-between sm:hidden">
-                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${colorClass}`}>
-                                            {isLaser ? <Zap size={18} /> : isFacial ? <Sparkles size={18} /> : <Activity size={18} />}
-                                        </div>
-                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${colorClass}`}>
-                                            {treatment.type}
-                                        </span>
+                        return (
+                            <div key={idx} className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-zinc-100 flex flex-col sm:flex-row gap-5 transition-all hover:border-teal-200 hover:shadow-md group/card">
+                                <div className="flex items-start justify-between sm:hidden">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${colorClass}`}>
+                                        {isLaser ? <Zap size={18} /> : isFacial ? <Sparkles size={18} /> : <Activity size={18} />}
                                     </div>
+                                    <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${colorClass}`}>
+                                        {treatment.type}
+                                    </span>
+                                </div>
 
-                                    <div className={`hidden sm:flex w-12 h-12 rounded-2xl items-center justify-center shrink-0 border ${colorClass}`}>
-                                        {isLaser ? <Zap size={22} /> : isFacial ? <Sparkles size={22} /> : <Activity size={22} />}
-                                    </div>
-                                    
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-sm text-zinc-900 mb-1.5 group-hover/card:text-teal-700 transition-colors flex items-center gap-2">
-                                            {treatment.name}
-                                            <span className="sm:hidden text-[9px] font-medium text-zinc-400 border border-zinc-100 px-1.5 py-0.5 rounded-full">{treatment.downtime}</span>
-                                        </h4>
-                                        <p className="text-xs text-zinc-500 font-medium leading-relaxed">{treatment.benefit}</p>
-                                    </div>
+                                <div className={`hidden sm:flex w-12 h-12 rounded-2xl items-center justify-center shrink-0 border ${colorClass}`}>
+                                    {isLaser ? <Zap size={22} /> : isFacial ? <Sparkles size={22} /> : <Activity size={22} />}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-sm text-zinc-900 mb-1.5 group-hover/card:text-teal-700 transition-colors flex items-center gap-2">
+                                        {treatment.name}
+                                        <span className="sm:hidden text-[9px] font-medium text-zinc-400 border border-zinc-100 px-1.5 py-0.5 rounded-full">{treatment.downtime}</span>
+                                    </h4>
+                                    <p className="text-xs text-zinc-500 font-medium leading-relaxed">{treatment.benefit}</p>
+                                </div>
 
-                                    <div className="hidden sm:flex flex-col items-end justify-center gap-2 min-w-[100px]">
-                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${colorClass}`}>
-                                            {treatment.type}
-                                        </span>
-                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
-                                            {treatment.downtime === 'None' ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> : <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>}
-                                            {treatment.downtime}
-                                        </div>
+                                <div className="hidden sm:flex flex-col items-end justify-center gap-2 min-w-[100px]">
+                                    <span className={`text-[9px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${colorClass}`}>
+                                        {treatment.type}
+                                    </span>
+                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
+                                        {treatment.downtime === 'None' ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> : <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>}
+                                        {treatment.downtime}
                                     </div>
                                 </div>
-                            );
-                        })}
-                     </div>
-                 )}
-            </div>
+                            </div>
+                        );
+                    })}
+                    </div>
+                )}
         </div>
 
         {selectedMetric && (
