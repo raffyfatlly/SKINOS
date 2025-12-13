@@ -25,14 +25,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
   };
 
   return (
-    <div className="h-screen w-full relative bg-white overflow-hidden flex flex-col font-sans p-8">
+    <div className="min-h-[100dvh] w-full relative bg-white flex flex-col font-sans p-6 sm:p-8 overflow-y-auto supports-[min-height:100dvh]:min-h-[100dvh]">
       
-      <div className="w-full flex justify-between items-center mb-12 pt-4">
+      <div className="w-full flex justify-between items-center mb-8 pt-2 shrink-0">
           <div className="flex items-center gap-4">
             {step > 0 && (
                 <button 
                     onClick={handleBack}
-                    className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 hover:bg-zinc-200 transition-colors shadow-sm"
+                    className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 hover:bg-zinc-200 transition-colors shadow-sm active:scale-95"
                     title="Back"
                 >
                     <ArrowLeft size={18} />
@@ -40,7 +40,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
             )}
             <div className="flex gap-2">
                 {[0, 1].map(i => (
-                    <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-teal-600' : 'w-2 bg-zinc-100'}`} />
+                    <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-teal-500' : 'w-2 bg-zinc-100'}`} />
                 ))}
             </div>
           </div>
@@ -48,7 +48,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
           {step === 0 ? (
              <button 
                 onClick={onSignIn}
-                className="text-zinc-500 text-[11px] font-bold tracking-widest uppercase hover:text-teal-600 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-50 hover:bg-teal-50"
+                className="text-zinc-500 text-[11px] font-bold tracking-widest uppercase hover:text-teal-600 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-50 hover:bg-teal-50 active:scale-95"
              >
                 <LogIn size={14} /> Log In
              </button>
@@ -59,16 +59,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
           )}
       </div>
 
-      <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full">
+      <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full min-h-[200px]">
             {step === 0 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
+                <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
                     <div>
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-teal-50 rounded-full mb-8 border border-teal-100">
+                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-teal-50 rounded-full mb-6 sm:mb-8 border border-teal-100">
                             <Sparkles size={12} className="text-teal-600" />
                             <span className="text-[10px] font-bold tracking-widest uppercase text-teal-600">AI Dermatologist</span>
                         </div>
-                        <h1 className="text-6xl font-black text-zinc-900 tracking-tighter mb-4 leading-tight">Hello, <br/><span className="text-zinc-300">Beautiful.</span></h1>
-                        <p className="text-lg text-zinc-500 font-medium leading-relaxed">Let's build your digital skin profile.</p>
+                        <h1 className="text-5xl sm:text-6xl font-black text-zinc-900 tracking-tighter mb-4 leading-tight">Hello, <br/><span className="text-zinc-300">Beautiful.</span></h1>
+                        <p className="text-base sm:text-lg text-zinc-500 font-medium leading-relaxed">Let's build your digital skin profile.</p>
                     </div>
                     <div className="space-y-4 pt-4">
                         <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Your Name</label>
@@ -77,7 +77,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Type here..."
-                            className="w-full bg-transparent border-b-2 border-zinc-100 px-0 py-4 text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 focus:outline-none focus:border-teal-600 transition-all rounded-none"
+                            className="w-full bg-transparent border-b-2 border-zinc-100 px-0 py-3 sm:py-4 text-3xl sm:text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 focus:outline-none focus:border-teal-500 transition-all rounded-none"
                             autoFocus
                         />
                     </div>
@@ -85,14 +85,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
             )}
 
             {step === 1 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
+                <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
                     <div>
-                         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-teal-50 rounded-full mb-8 border border-teal-100">
+                         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-teal-50 rounded-full mb-6 sm:mb-8 border border-teal-100">
                             <Calendar size={12} className="text-teal-600" />
                             <span className="text-[10px] font-bold tracking-widest uppercase text-teal-600">Bio-Age</span>
                         </div>
-                        <h1 className="text-6xl font-black text-zinc-900 tracking-tighter mb-4 leading-tight">Age is just <br/><span className="text-zinc-300">data.</span></h1>
-                        <p className="text-lg text-zinc-500 font-medium leading-relaxed">This helps us track collagen needs.</p>
+                        <h1 className="text-5xl sm:text-6xl font-black text-zinc-900 tracking-tighter mb-4 leading-tight">Age is just <br/><span className="text-zinc-300">data.</span></h1>
+                        <p className="text-base sm:text-lg text-zinc-500 font-medium leading-relaxed">This helps us track collagen needs.</p>
                     </div>
                     <div className="space-y-4 pt-4">
                         <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Your Age</label>
@@ -101,7 +101,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
                             value={age}
                             onChange={(e) => setAge(e.target.value)}
                             placeholder="e.g. 25"
-                            className="w-full bg-transparent border-b-2 border-zinc-100 px-0 py-4 text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 focus:outline-none focus:border-teal-600 transition-all rounded-none"
+                            className="w-full bg-transparent border-b-2 border-zinc-100 px-0 py-3 sm:py-4 text-3xl sm:text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 focus:outline-none focus:border-teal-500 transition-all rounded-none"
                             autoFocus
                         />
                     </div>
@@ -109,16 +109,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
             )}
       </div>
 
-      <button
-        onClick={handleNext}
-        disabled={(step === 0 && !name) || (step === 1 && !age)}
-        className="w-full h-20 bg-zinc-900 text-white rounded-[2rem] font-bold text-lg flex items-center justify-between px-8 disabled:opacity-50 disabled:scale-100 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-zinc-900/20 mt-4 group shrink-0"
-    >
-        <span>{step === 1 ? 'Start Scan' : 'Next Step'}</span>
-        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors border border-white/10">
-            {step === 1 ? <ScanFace size={22} /> : <ArrowRight size={22} />}
-        </div>
-    </button>
+      <div className="mt-auto pt-8 shrink-0">
+        <button
+            onClick={handleNext}
+            disabled={(step === 0 && !name) || (step === 1 && !age)}
+            className="w-full h-16 sm:h-20 bg-teal-500 text-white rounded-[2rem] font-bold text-lg flex items-center justify-between px-8 disabled:opacity-50 disabled:scale-100 hover:bg-teal-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-teal-500/20 group shrink-0"
+        >
+            <span>{step === 1 ? 'Start Scan' : 'Next Step'}</span>
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors border border-white/10">
+                {step === 1 ? <ScanFace size={22} /> : <ArrowRight size={22} />}
+            </div>
+        </button>
+      </div>
     </div>
   );
 };
