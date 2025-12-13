@@ -581,20 +581,23 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50/30">
-      {/* HEADER - TEAL GRADIENT */}
-      <div className="px-6 pt-12 pb-8 bg-gradient-to-br from-teal-600 via-teal-700 to-teal-800 text-white rounded-b-[2.5rem] shadow-xl relative overflow-hidden border-b border-teal-500/50">
+      {/* HEADER - SOLID RGB */}
+      <div 
+          className="px-6 pt-12 pb-8 text-white rounded-b-[2.5rem] shadow-xl relative overflow-hidden border-b border-white/20"
+          style={{ backgroundColor: 'rgb(163, 206, 207)' }}
+      >
           {/* Subtle Texture Overlay */}
           <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
           
           <div className="relative z-10">
               <div className="flex justify-between items-start mb-6">
-                  <button onClick={onBack} className="p-2 -ml-2 text-white/80 hover:text-white transition-colors">
+                  <button onClick={onBack} className="p-2 -ml-2 text-white hover:scale-105 transition-all drop-shadow-md">
                       <ArrowLeft size={24} />
                   </button>
                   {auth && auth.currentUser && (
                       <button 
                         onClick={handleSignOut}
-                        className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+                        className="p-2 bg-white/20 rounded-full text-white hover:bg-white/30 transition-colors shadow-sm border border-white/20"
                         title="Sign Out"
                       >
                           <LogOut size={18} />
@@ -603,7 +606,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
               </div>
 
               <div className="flex items-center gap-5 mb-8">
-                  <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shadow-inner border border-white/20 text-2xl font-black shrink-0">
+                  <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shadow-inner border border-white/30 text-2xl font-black shrink-0 drop-shadow-md">
                       {user.name.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -612,7 +615,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                                 <input 
                                     value={editName}
                                     onChange={(e) => setEditName(e.target.value)}
-                                    className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-2xl font-black text-white w-full focus:outline-none focus:bg-white/20"
+                                    className="bg-white/20 border border-white/40 rounded-lg px-3 py-1.5 text-2xl font-black text-white w-full focus:outline-none focus:bg-white/30 placeholder:text-white/50 drop-shadow-sm"
                                     placeholder="Name"
                                 />
                                 <div className="flex items-center gap-2">
@@ -620,48 +623,48 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                                         type="number"
                                         value={editAge}
                                         onChange={(e) => setEditAge(e.target.value)}
-                                        className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm font-bold text-white w-20 focus:outline-none focus:bg-white/20"
+                                        className="bg-white/20 border border-white/40 rounded-lg px-3 py-1.5 text-sm font-bold text-white w-20 focus:outline-none focus:bg-white/30 placeholder:text-white/50 drop-shadow-sm"
                                         placeholder="Age"
                                     />
-                                    <span className="text-teal-100 text-xs font-medium whitespace-nowrap">Years</span>
+                                    <span className="text-white text-xs font-bold whitespace-nowrap drop-shadow-sm">Years</span>
                                     
                                     <div className="flex-1 flex justify-end gap-2 ml-2">
-                                         <button onClick={() => setIsEditingProfile(false)} className="p-1.5 bg-white/10 rounded-lg text-white hover:bg-white/20"><X size={16}/></button>
-                                         <button onClick={handleSaveProfile} className="p-1.5 bg-white rounded-lg text-teal-700 hover:bg-teal-50"><Check size={16}/></button>
+                                         <button onClick={() => setIsEditingProfile(false)} className="p-1.5 bg-white/20 rounded-lg text-white hover:bg-white/30 border border-white/20"><X size={16}/></button>
+                                         <button onClick={handleSaveProfile} className="p-1.5 bg-white rounded-lg text-teal-600 hover:bg-teal-50 shadow-sm"><Check size={16}/></button>
                                     </div>
                                 </div>
                           </div>
                       ) : (
                           <>
                              <div className="flex items-center gap-3">
-                                 <h1 className="text-3xl font-black tracking-tighter text-white truncate">{user.name}</h1>
+                                 <h1 className="text-3xl font-black tracking-tighter text-white truncate drop-shadow-md">{user.name}</h1>
                                  <button onClick={() => {
                                      setEditName(user.name);
                                      setEditAge(user.age.toString());
                                      setIsEditingProfile(true);
-                                 }} className="p-1.5 bg-white/10 rounded-full text-white/80 hover:bg-white/20 hover:text-white transition-all">
+                                 }} className="p-1.5 bg-white/20 rounded-full text-white hover:bg-white/30 hover:scale-105 transition-all border border-white/20 shadow-sm">
                                      <Edit2 size={14} />
                                  </button>
                              </div>
-                             <p className="text-sm font-medium text-teal-100/90 mt-1">{user.age} Years • {user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin</p>
+                             <p className="text-sm font-bold text-white mt-1 drop-shadow-sm opacity-95">{user.age} Years • {user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin</p>
                           </>
                       )}
                       {auth && auth.currentUser && !isEditingProfile && (
-                          <span className="text-[10px] font-bold bg-teal-500/40 px-2 py-0.5 rounded text-white mt-1 inline-block">Cloud Synced</span>
+                          <span className="text-[10px] font-bold bg-white/25 border border-white/30 px-2 py-0.5 rounded text-white mt-1 inline-block drop-shadow-sm">Cloud Synced</span>
                       )}
                   </div>
               </div>
 
               <div className="flex gap-4">
-                  <div className="flex-1 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 shadow-sm">
-                       <span className="text-[10px] font-bold text-teal-100 uppercase tracking-widest block mb-1">Total Scans</span>
-                       <span className="text-2xl font-black text-white">{history.length}</span>
+                  <div className="flex-1 bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30 shadow-lg shadow-teal-900/5">
+                       <span className="text-[10px] font-bold text-white uppercase tracking-widest block mb-1 drop-shadow-sm">Total Scans</span>
+                       <span className="text-2xl font-black text-white drop-shadow-md">{history.length}</span>
                   </div>
-                  <div className="flex-1 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 shadow-sm">
-                       <span className="text-[10px] font-bold text-teal-100 uppercase tracking-widest block mb-1">Progress</span>
-                       <span className={`text-2xl font-black flex items-center gap-1 text-white`}>
+                  <div className="flex-1 bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30 shadow-lg shadow-teal-900/5">
+                       <span className="text-[10px] font-bold text-white uppercase tracking-widest block mb-1 drop-shadow-sm">Progress</span>
+                       <span className={`text-2xl font-black flex items-center gap-1 text-white drop-shadow-md`}>
                           {totalProgress > 0 ? '+' : ''}{totalProgress}
-                          {totalProgress > 0 ? <TrendingUp size={18} className="text-teal-200" /> : totalProgress < 0 ? <TrendingUp size={18} className="rotate-180 text-rose-300" /> : <Minus size={18} className="text-zinc-300" />}
+                          {totalProgress > 0 ? <TrendingUp size={18} className="text-white drop-shadow-sm" /> : totalProgress < 0 ? <TrendingUp size={18} className="rotate-180 text-rose-100 drop-shadow-sm" /> : <Minus size={18} className="text-white/80" />}
                        </span>
                   </div>
               </div>

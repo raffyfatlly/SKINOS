@@ -1,4 +1,5 @@
 
+// ... imports remain the same ...
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
@@ -967,42 +968,44 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
         </div>
 
         {/* PRESCRIPTION PROTOCOL CARD - REVEAL INTERACTION */}
-        <div className="rounded-[2.5rem] animate-in slide-in-from-bottom-8 duration-700 delay-500 bg-gradient-to-br from-teal-500 to-teal-700 shadow-2xl shadow-teal-900/20 relative overflow-hidden text-white group p-8 min-h-[400px] flex flex-col justify-center transition-all">
+        <div 
+            className="rounded-[2.5rem] animate-in slide-in-from-bottom-8 duration-700 delay-500 shadow-2xl shadow-teal-900/10 relative overflow-hidden group p-8 min-h-[400px] flex flex-col justify-center transition-all"
+            style={{ backgroundColor: 'rgb(163, 206, 207)' }}
+        >
              {/* Decorative Background */}
-             <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none mix-blend-overlay animate-pulse"></div>
-             <div className="absolute bottom-0 left-0 w-72 h-72 bg-teal-900/20 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
+             <div className="absolute top-0 right-0 w-96 h-96 bg-white/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none mix-blend-overlay animate-pulse"></div>
+             <div className="absolute bottom-0 left-0 w-72 h-72 bg-teal-900/5 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
 
              {!isPrescriptionRevealed ? (
                  <div className="relative z-10 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-500">
-                      <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md mb-8 relative border border-white/20 shadow-inner">
-                          <div className="absolute inset-0 bg-teal-400/20 rounded-full animate-ping duration-1000"></div>
-                          <Fingerprint size={48} className="text-white drop-shadow-md" strokeWidth={1.5} />
+                      <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md mb-8 relative border border-white/20 shadow-inner">
+                          <div className="absolute inset-0 bg-white/20 rounded-full animate-ping duration-1000"></div>
+                          <Fingerprint size={48} className="text-white drop-shadow-sm" strokeWidth={1.5} />
                       </div>
                       
-                      <h3 className="text-3xl font-black text-white mb-3 tracking-tighter">Analysis Complete</h3>
-                      <p className="text-teal-100 font-medium text-sm mb-10 max-w-[280px] mx-auto leading-relaxed opacity-90">
+                      <h3 className="text-3xl font-black text-white mb-3 tracking-tighter drop-shadow-md">Analysis Complete</h3>
+                      <p className="text-white font-bold text-sm mb-10 max-w-[280px] mx-auto leading-relaxed drop-shadow-sm opacity-95">
                           We've analyzed your biometrics and identified {prescription.ingredients.length} active ingredients that target your specific needs.
                       </p>
                       
                       <button 
                         onClick={() => setIsPrescriptionRevealed(true)}
-                        className="group relative px-10 py-5 bg-white text-teal-700 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-[0_0_50px_rgba(255,255,255,0.25)] hover:shadow-[0_0_80px_rgba(255,255,255,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 overflow-hidden"
+                        className="group relative px-10 py-5 bg-white text-teal-700 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-[0_0_30px_rgba(255,255,255,0.5)] hover:shadow-[0_0_50px_rgba(255,255,255,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 overflow-hidden"
                       >
                           <span className="relative z-10 flex items-center gap-2">
                              Reveal Formula <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                           </span>
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-teal-50/50 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
                       </button>
                  </div>
              ) : (
                  <div className="relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
                     <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h4 className="text-[10px] font-bold text-teal-100 uppercase tracking-widest mb-2 flex items-center gap-2 opacity-90 animate-in slide-in-from-left-4 duration-500 delay-100">
+                            <h4 className="text-[10px] font-bold text-white uppercase tracking-widest mb-2 flex items-center gap-2 opacity-90 animate-in slide-in-from-left-4 duration-500 delay-100">
                                 <Search size={14} className="text-white" /> Recommended for You
                             </h4>
-                            <h2 className="text-2xl font-black text-white tracking-tight leading-none animate-in slide-in-from-left-4 duration-500 delay-200">Power Ingredients</h2>
-                            <p className="text-sm text-teal-50 font-medium mt-1 opacity-90 animate-in slide-in-from-left-4 duration-500 delay-300">Look for these ingredients on product labels.</p>
+                            <h2 className="text-2xl font-black text-white tracking-tight leading-none animate-in slide-in-from-left-4 duration-500 delay-200 drop-shadow-sm">Power Ingredients</h2>
+                            <p className="text-sm text-white font-medium mt-1 opacity-95 animate-in slide-in-from-left-4 duration-500 delay-300">Look for these ingredients on product labels.</p>
                         </div>
                     </div>
                     
@@ -1028,14 +1031,14 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
 
                     {/* INGREDIENTS TO AVOID */}
                     {prescription.avoid.length > 0 && (
-                        <div className="mt-6 pt-6 border-t border-white/20 animate-in fade-in duration-700 delay-1000">
+                        <div className="mt-6 pt-6 border-t border-white/30 animate-in fade-in duration-700 delay-1000">
                             <div className="flex items-start gap-3 opacity-90">
                                  <div className="mt-0.5">
                                     <Ban size={14} className="text-white" />
                                  </div>
                                  <div>
                                      <span className="text-[10px] font-bold text-white uppercase tracking-widest block mb-1">Avoid for now</span>
-                                     <p className="text-xs text-teal-50 font-medium leading-relaxed">
+                                     <p className="text-xs text-white font-medium leading-relaxed">
                                          {prescription.avoid.join(', ')}
                                      </p>
                                  </div>
