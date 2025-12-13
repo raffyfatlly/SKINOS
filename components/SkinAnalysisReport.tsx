@@ -261,7 +261,7 @@ interface SkinAnalysisReportProps {
   onRescan: () => void;
   onConsultAI: (query: string) => void;
   onViewProgress?: () => void;
-  onLoginRequired: () => void;
+  onLoginRequired: (reason: string) => void;
 }
 
 const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, shelf, onRescan, onConsultAI, onViewProgress, onLoginRequired }) => {
@@ -818,9 +818,17 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
   const handleRescan = () => {
       // Check if user is anonymous before allowing rescan
       if (userProfile.isAnonymous) {
-          onLoginRequired();
+          onLoginRequired('RESCAN_FACE');
       } else {
           onRescan();
+      }
+  };
+
+  const handleViewProgress = () => {
+      if (userProfile.isAnonymous) {
+          onLoginRequired('VIEW_PROGRESS');
+      } else if (onViewProgress) {
+          onViewProgress();
       }
   };
 
@@ -883,9 +891,9 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                  </p>
              </div>
              
-             {!isAnonymous && hasHistory && onViewProgress && (
+             {onViewProgress && (
                  <button 
-                    onClick={onViewProgress}
+                    onClick={handleViewProgress}
                     className="shrink-0 flex items-center justify-center gap-2 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 rounded-xl px-5 py-3 text-xs font-bold uppercase tracking-wide border border-zinc-200 transition-colors self-start sm:self-center w-full sm:w-auto"
                  >
                     <TrendingUp size={14} /> See My Progress

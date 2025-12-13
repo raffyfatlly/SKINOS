@@ -1,13 +1,16 @@
 
 import React, { useState } from 'react';
-import { X, ShieldCheck, Cloud, UserCheck, Mail, Lock, ArrowRight, AlertTriangle, Loader, Check, Fingerprint, History, Sparkles } from 'lucide-react';
+import { X, ShieldCheck, Cloud, UserCheck, Mail, Lock, ArrowRight, AlertTriangle, Loader, Check, Fingerprint, History, Sparkles, ScanBarcode, LineChart } from 'lucide-react';
 import { signInWithGoogle, registerWithEmail, loginWithEmail } from '../services/firebase';
+
+export type AuthTrigger = 'SCAN_PRODUCT' | 'RESCAN_FACE' | 'VIEW_PROGRESS' | 'GENERIC' | 'SAVE_RESULTS';
 
 interface SaveProfileModalProps {
   onSave: () => void;
   onClose: () => void;
   onMockLogin?: () => void;
   mode: 'LOGIN' | 'SAVE';
+  trigger?: AuthTrigger;
 }
 
 // Google Logo Component
@@ -20,7 +23,7 @@ const GoogleLogo = () => (
   </svg>
 );
 
-const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, onMockLogin, mode }) => {
+const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, onMockLogin, mode, trigger = 'GENERIC' }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -106,6 +109,53 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
       </div>
   );
 
+  // --- CONTEXTUAL CONTENT LOGIC ---
+  const getContextContent = () => {
+      if (isLoginView) {
+          return {
+              title: "Welcome Back",
+              desc: "Log in to access your dashboard & history.",
+              icon: UserCheck
+          };
+      }
+
+      switch (trigger) {
+          case 'SCAN_PRODUCT':
+              return {
+                  title: "Unlock Smart Scanner",
+                  desc: "Create a free account to analyze ingredients and save matches to your shelf.",
+                  icon: ScanBarcode
+              };
+          case 'RESCAN_FACE':
+              return {
+                  title: "Track Skin Health",
+                  desc: "Save your baseline to measure how your metrics improve over time.",
+                  icon: Sparkles
+              };
+          case 'VIEW_PROGRESS':
+              return {
+                  title: "Unlock Trends",
+                  desc: "Create an account to visualize your skin health journey and see what's working.",
+                  icon: LineChart
+              };
+          case 'SAVE_RESULTS':
+              return {
+                  title: "Save Your Results",
+                  desc: "Don't lose this analysis. Create an account to access it later.",
+                  icon: ShieldCheck
+              };
+          default:
+              return {
+                  title: "Save Your Skin DNA",
+                  desc: "Create a free account to unlock progress tracking and cloud sync.",
+                  icon: Fingerprint
+              };
+      }
+  };
+
+  const content = getContextContent();
+  const IconComponent = content.icon;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in duration-300">
       <div className="w-full max-w-[22rem] bg-white rounded-[2rem] p-6 relative animate-in zoom-in-95 shadow-2xl border border-white/50 max-h-[90vh] overflow-y-auto no-scrollbar">
@@ -123,16 +173,13 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
             <div className="text-center mb-5 mt-2">
                 {/* UPDATED ICON STYLE: Mint Teal Icon on Light Background */}
                 <div className="w-14 h-14 bg-teal-50 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-lg shadow-teal-500/10 rotate-3 transform border border-teal-100">
-                     {isLoginView ? <UserCheck className="text-teal-500" size={28} /> : <Fingerprint className="text-teal-500" size={28} />}
+                     <IconComponent className="text-teal-500" size={28} />
                 </div>
                 <h2 className="text-xl font-black text-zinc-900 tracking-tight mb-1">
-                    {isLoginView ? "Welcome Back" : "Save Your Skin DNA"}
+                    {content.title}
                 </h2>
                 <p className="text-xs font-medium text-zinc-500 leading-relaxed max-w-[240px] mx-auto">
-                    {isLoginView 
-                        ? "Log in to access your dashboard & history."
-                        : "Create a free account to unlock progress tracking."
-                    }
+                    {content.desc}
                 </p>
             </div>
 

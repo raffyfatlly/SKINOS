@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   AppView, 
@@ -21,7 +22,7 @@ import ProductSearch from './components/ProductSearch';
 import ProfileSetup from './components/ProfileSetup';
 import AIAssistant from './components/AIAssistant';
 import BuyingAssistant from './components/BuyingAssistant';
-import SaveProfileModal from './components/SaveProfileModal';
+import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 
 // Icons
@@ -39,9 +40,19 @@ const App: React.FC = () => {
   
   // Modals & Overlays
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  
+  // Auth Modal State
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveModalTrigger, setSaveModalTrigger] = useState<AuthTrigger>('GENERIC');
+
   const [notification, setNotification] = useState<{ type: NotificationType, title: string, description: string, actionLabel: string, onAction: () => void } | null>(null);
   const [aiQuery, setAiQuery] = useState<string | null>(null);
+
+  // --- HELPER: OPEN AUTH MODAL WITH CONTEXT ---
+  const openAuth = (trigger: AuthTrigger) => {
+      setSaveModalTrigger(trigger);
+      setShowSaveModal(true);
+  };
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -171,7 +182,7 @@ const App: React.FC = () => {
       const handleNavClick = (view: AppView) => {
           // RESTRICTION: Only logged-in users can search or scan products
           if ((view === AppView.PRODUCT_SEARCH || view === AppView.PRODUCT_SCANNER) && userProfile?.isAnonymous) {
-              setShowSaveModal(true);
+              openAuth('SCAN_PRODUCT');
               return;
           }
           setCurrentView(view);
@@ -210,15 +221,15 @@ const App: React.FC = () => {
   const renderView = () => {
       // Fallback for corrupted state (if user is null but we are deep in app)
       if (!userProfile && ![AppView.LANDING, AppView.ONBOARDING].includes(currentView)) {
-          return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => setShowSaveModal(true)} />;
+          return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => openAuth('GENERIC')} />;
       }
 
       switch (currentView) {
           case AppView.LANDING:
-              return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => setShowSaveModal(true)} />;
+              return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => openAuth('GENERIC')} />;
 
           case AppView.ONBOARDING:
-              return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => setShowSaveModal(true)} />;
+              return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => openAuth('GENERIC')} />;
           
           case AppView.FACE_SCANNER:
               return (
@@ -237,7 +248,7 @@ const App: React.FC = () => {
                     onRescan={() => setCurrentView(AppView.FACE_SCANNER)}
                     onConsultAI={(q) => { setAiQuery(q); setShowAIAssistant(true); }}
                     onViewProgress={() => setCurrentView(AppView.PROFILE_SETUP)}
-                    onLoginRequired={() => setShowSaveModal(true)}
+                    onLoginRequired={(reason) => openAuth(reason as AuthTrigger)}
                   />
               ) : null;
 
@@ -248,7 +259,13 @@ const App: React.FC = () => {
                     userProfile={userProfile}
                     onRemoveProduct={handleRemoveProduct}
                     onUpdateProduct={handleUpdateProduct}
-                    onScanNew={() => setCurrentView(AppView.PRODUCT_SCANNER)}
+                    onScanNew={() => {
+                        if (userProfile.isAnonymous) {
+                            openAuth('SCAN_PRODUCT');
+                        } else {
+                            setCurrentView(AppView.PRODUCT_SCANNER);
+                        }
+                    }}
                   />
               ) : null;
           
@@ -289,6 +306,7 @@ const App: React.FC = () => {
                     onComplete={handleProfileUpdate}
                     onBack={() => setCurrentView(AppView.DASHBOARD)}
                     onReset={handleResetApp}
+                    onLoginRequired={(reason) => openAuth(reason as AuthTrigger)}
                   />
               ) : null;
 
@@ -316,6 +334,7 @@ const App: React.FC = () => {
         {showSaveModal && (
             <SaveProfileModal 
                 mode={userProfile?.isAnonymous ? 'SAVE' : 'LOGIN'}
+                trigger={saveModalTrigger}
                 onClose={() => setShowSaveModal(false)}
                 onSave={() => {}}
                 onMockLogin={() => {

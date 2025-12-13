@@ -26,6 +26,7 @@ interface ProfileSetupProps {
   onComplete: (updatedProfile: UserProfile) => void;
   onBack: () => void;
   onReset: () => void;
+  onLoginRequired: (trigger: string) => void;
 }
 
 // --- SUB-COMPONENT: MONTH GROUP (Expandable) ---
@@ -372,7 +373,7 @@ const ScanDetailModal: React.FC<{ scan: SkinMetrics; onClose: () => void }> = ({
     );
 };
 
-const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplete, onBack, onReset }) => {
+const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplete, onBack, onReset, onLoginRequired }) => {
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [selectedScan, setSelectedScan] = useState<SkinMetrics | null>(null);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -821,7 +822,13 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
           {/* DANGER ZONE */}
           <div className="mt-12 text-center pb-8">
                <button 
-                  onClick={() => setShowClearConfirm(true)}
+                  onClick={() => {
+                      if (user.isAnonymous) {
+                          onLoginRequired('GENERIC');
+                      } else {
+                          setShowClearConfirm(true);
+                      }
+                  }}
                   className="inline-flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-widest hover:text-rose-600 transition-colors px-6 py-3 rounded-full hover:bg-rose-50"
                >
                    <Trash2 size={14} /> Clear Local Data
