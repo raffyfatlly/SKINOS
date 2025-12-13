@@ -1,8 +1,8 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Product, UserProfile } from '../types';
 import { getBuyingDecision } from '../services/geminiService';
-import { Check, X, AlertTriangle, ShieldCheck, Zap, AlertOctagon, TrendingUp, DollarSign, Clock, ArrowRight } from 'lucide-react';
+import { Check, X, AlertTriangle, ShieldCheck, Zap, AlertOctagon, TrendingUp, DollarSign, Clock, ArrowRight, Lock, Sparkles, Crown } from 'lucide-react';
 
 interface BuyingAssistantProps {
   product: Product;
@@ -13,12 +13,16 @@ interface BuyingAssistantProps {
 }
 
 const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf, onAddToShelf, onDiscard }) => {
+  const [isUnlocked, setIsUnlocked] = useState(false);
   
   const decisionData = useMemo(() => {
     return getBuyingDecision(product, shelf, user);
   }, [product, shelf, user]);
 
   const { verdict, audit, shelfConflicts, comparison } = decisionData;
+
+  // Prevent color spoilers while locked
+  const safeVerdictColor = isUnlocked ? verdict.color : 'zinc';
 
   const getVerdictIcon = () => {
       switch(verdict.decision) {
@@ -38,7 +42,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
   };
 
   const getVerdictGradient = () => {
-      switch(verdict.color) {
+      switch(safeVerdictColor) {
           case 'emerald': return 'from-emerald-500 to-teal-600 shadow-emerald-200';
           case 'rose': return 'from-rose-500 to-red-600 shadow-rose-200';
           case 'amber': return 'from-amber-400 to-orange-500 shadow-amber-200';
@@ -48,7 +52,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
   };
 
   const getPageBackground = () => {
-      switch(verdict.color) {
+      switch(safeVerdictColor) {
           case 'emerald': return 'bg-emerald-50';
           case 'rose': return 'bg-rose-50';
           case 'amber': return 'bg-amber-50';
@@ -59,7 +63,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
   return (
     <div className={`min-h-screen pb-32 animate-in slide-in-from-bottom-8 duration-500 ${getPageBackground()}`}>
         {/* Header Image / Brand Area */}
-        <div className="pt-12 px-6 pb-6 bg-white rounded-b-[2.5rem] shadow-sm border-b border-zinc-100 relative overflow-hidden">
+        <div className="pt-12 px-6 pb-6 bg-white rounded-b-[2.5rem] shadow-sm border-b border-zinc-100 relative overflow-hidden z-20">
             <div className="absolute top-0 right-0 w-32 h-32 bg-zinc-100 rounded-full -mr-10 -mt-10 opacity-50"></div>
             
             <button onClick={onDiscard} className="absolute top-6 left-6 p-2 bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors z-10">
@@ -79,142 +83,178 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
             </div>
         </div>
 
-        <div className="px-6 -mt-6 relative z-20">
-            {/* VERDICT CARD */}
-            <div className={`rounded-[2rem] p-5 text-white shadow-xl bg-gradient-to-br ${getVerdictGradient()} relative overflow-hidden`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
-                
-                <div className="flex items-center gap-4 relative z-10">
-                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shrink-0 shadow-sm">
-                        {getVerdictIcon()}
+        <div className="relative">
+            {/* LOCKED OVERLAY */}
+            {!isUnlocked && (
+                <div className="absolute inset-0 z-30 flex flex-col items-center pt-10 backdrop-blur-md bg-white/60 h-full">
+                     <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-2xl border border-zinc-100 animate-in zoom-in duration-300">
+                        <Lock className="text-zinc-900" size={32} />
+                     </div>
+                     
+                     <h2 className="text-3xl font-black text-zinc-900 mb-2 text-center tracking-tight drop-shadow-sm">Analysis Ready</h2>
+                     <p className="text-zinc-500 font-medium text-center mb-10 max-w-[240px] leading-relaxed text-sm">
+                        We've audited this formula against your skin DNA. Unlock the safety report.
+                     </p>
+
+                     {/* Spinning Unlock Button */}
+                     <div className="relative inline-flex group rounded-full p-[2px] overflow-hidden shadow-[0_10px_20px_rgba(0,0,0,0.1)] scale-110">
+                        <div className="absolute inset-[-100%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2E8F0_0%,#E2E8F0_50%,#0F766E_100%)]" />
+                        <button 
+                            onClick={() => setIsUnlocked(true)}
+                            className="relative z-10 bg-white text-teal-900 px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                        >
+                            <Sparkles size={14} className="text-amber-400 fill-amber-400 group-hover:rotate-12 transition-transform" /> Unlock Result
+                        </button>
                     </div>
                     
-                    <div className="flex-1 min-w-0">
-                         <div className="flex items-center gap-1.5 mb-0.5 opacity-90">
-                            <Zap size={10} className="fill-current" />
-                            <span className="text-[9px] font-bold uppercase tracking-widest">AI Verdict</span>
-                        </div>
-                        <h2 className="text-xl font-black tracking-tight leading-none truncate">{verdict.title}</h2>
-                    </div>
+                    <button onClick={onDiscard} className="mt-12 text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600 transition-colors px-4 py-2">
+                        Cancel Analysis
+                    </button>
+                </div>
+            )}
 
-                    <div className="text-right bg-black/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-sm">
-                         <span className="block text-[9px] font-bold uppercase tracking-wide opacity-80 mb-0.5">Match</span>
-                         <span className="text-xl font-black leading-none">{product.suitabilityScore}%</span>
+            {/* MAIN CONTENT (Blurred if Locked) */}
+            <div className={`transition-all duration-700 ${!isUnlocked ? 'filter blur-lg opacity-60 pointer-events-none select-none grayscale-[0.5]' : ''}`}>
+                <div className="px-6 -mt-6 relative z-10">
+                    {/* VERDICT CARD */}
+                    <div className={`rounded-[2rem] p-5 text-white shadow-xl bg-gradient-to-br ${getVerdictGradient()} relative overflow-hidden`}>
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
+                        
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shrink-0 shadow-sm">
+                                {getVerdictIcon()}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5 opacity-90">
+                                    <Zap size={10} className="fill-current" />
+                                    <span className="text-[9px] font-bold uppercase tracking-widest">AI Verdict</span>
+                                </div>
+                                <h2 className="text-xl font-black tracking-tight leading-none truncate">{verdict.title}</h2>
+                            </div>
+
+                            <div className="text-right bg-black/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-sm">
+                                <span className="block text-[9px] font-bold uppercase tracking-wide opacity-80 mb-0.5">Match</span>
+                                <span className="text-xl font-black leading-none">{product.suitabilityScore}%</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-white/10 relative z-10">
+                            <p className="text-xs font-medium leading-relaxed opacity-95">
+                                {verdict.description}
+                            </p>
+                            
+                            {comparison.result !== 'NEUTRAL' && (
+                                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
+                                    <span className="text-[10px] font-bold uppercase opacity-70">Vs Routine:</span>
+                                    <div className="flex items-center gap-1 text-xs font-bold">
+                                        <span>{comparison.result === 'BETTER' ? 'Upgrade' : 'Downgrade'}</span>
+                                        {comparison.result === 'BETTER' ? <TrendingUp size={12} /> : <TrendingUp size={12} className="rotate-180" />}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-white/10 relative z-10">
-                    <p className="text-xs font-medium leading-relaxed opacity-95">
-                        {verdict.description}
-                    </p>
-                    
-                     {comparison.result !== 'NEUTRAL' && (
-                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
-                             <span className="text-[10px] font-bold uppercase opacity-70">Vs Routine:</span>
-                             <div className="flex items-center gap-1 text-xs font-bold">
-                                <span>{comparison.result === 'BETTER' ? 'Upgrade' : 'Downgrade'}</span>
-                                {comparison.result === 'BETTER' ? <TrendingUp size={12} /> : <TrendingUp size={12} className="rotate-180" />}
-                             </div>
+                <div className="px-6 space-y-4 mt-6">
+                    {/* CRITICAL ALERTS */}
+                    {audit.warnings.length > 0 && (
+                        <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <AlertOctagon size={14} className="text-rose-500" /> Risk Analysis
+                            </h3>
+                            <div className="space-y-3">
+                                {audit.warnings.map((w, i) => (
+                                    <div key={i} className={`flex gap-3 p-3 rounded-xl border ${w.severity === 'CRITICAL' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'}`}>
+                                        <div className="mt-0.5">
+                                            {w.severity === 'CRITICAL' ? <AlertOctagon size={16} className="text-rose-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
+                                        </div>
+                                        <div>
+                                            <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded mb-1 inline-block ${w.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {w.severity}
+                                            </span>
+                                            <p className={`text-xs font-medium leading-snug ${w.severity === 'CRITICAL' ? 'text-rose-800' : 'text-amber-800'}`}>
+                                                {w.reason}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CONFLICTS */}
+                    {shelfConflicts.length > 0 && (
+                        <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <Clock size={14} className="text-indigo-500" /> Routine Conflicts
+                            </h3>
+                            <div className="space-y-2">
+                                {shelfConflicts.map((c, i) => (
+                                    <div key={i} className="flex gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-100">
+                                        <AlertTriangle size={16} className="text-indigo-500 mt-0.5" />
+                                        <p className="text-xs font-medium text-indigo-800 leading-snug">{c}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* BENEFITS */}
+                    {product.benefits.length > 0 && (
+                        <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <ShieldCheck size={14} className="text-teal-500" /> Key Benefits
+                            </h3>
+                            <div className="space-y-3">
+                                {product.benefits.slice(0, 3).map((b, i) => {
+                                    const metricScore = user.biometrics[b.target] || 0;
+                                    const isTargeted = metricScore < 60;
+                                    
+                                    return (
+                                        <div key={i} className="flex gap-3 items-start">
+                                            <div className={`mt-0.5 ${isTargeted ? 'text-teal-500' : 'text-zinc-400'}`}>
+                                                <Check size={16} strokeWidth={3} />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className="text-sm font-bold text-zinc-900">{b.ingredient}</span>
+                                                    {isTargeted && (
+                                                        <span className="text-[9px] font-bold bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded border border-teal-100 uppercase">Targeted</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-zinc-500 font-medium leading-snug">{b.description}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
         </div>
 
-        <div className="px-6 space-y-4 mt-6">
-             {/* CRITICAL ALERTS */}
-             {audit.warnings.length > 0 && (
-                 <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
-                     <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                         <AlertOctagon size={14} className="text-rose-500" /> Risk Analysis
-                     </h3>
-                     <div className="space-y-3">
-                         {audit.warnings.map((w, i) => (
-                             <div key={i} className={`flex gap-3 p-3 rounded-xl border ${w.severity === 'CRITICAL' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'}`}>
-                                 <div className="mt-0.5">
-                                     {w.severity === 'CRITICAL' ? <AlertOctagon size={16} className="text-rose-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
-                                 </div>
-                                 <div>
-                                     <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded mb-1 inline-block ${w.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                                         {w.severity}
-                                     </span>
-                                     <p className={`text-xs font-medium leading-snug ${w.severity === 'CRITICAL' ? 'text-rose-800' : 'text-amber-800'}`}>
-                                         {w.reason}
-                                     </p>
-                                 </div>
-                             </div>
-                         ))}
-                     </div>
-                 </div>
-             )}
-
-             {/* CONFLICTS */}
-             {shelfConflicts.length > 0 && (
-                 <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
-                     <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                         <Clock size={14} className="text-indigo-500" /> Routine Conflicts
-                     </h3>
-                     <div className="space-y-2">
-                         {shelfConflicts.map((c, i) => (
-                             <div key={i} className="flex gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-100">
-                                 <AlertTriangle size={16} className="text-indigo-500 mt-0.5" />
-                                 <p className="text-xs font-medium text-indigo-800 leading-snug">{c}</p>
-                             </div>
-                         ))}
-                     </div>
-                 </div>
-             )}
-
-             {/* BENEFITS */}
-             {product.benefits.length > 0 && (
-                 <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
-                     <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                         <ShieldCheck size={14} className="text-teal-500" /> Key Benefits
-                     </h3>
-                     <div className="space-y-3">
-                         {product.benefits.slice(0, 3).map((b, i) => {
-                             const metricScore = user.biometrics[b.target] || 0;
-                             const isTargeted = metricScore < 60;
-                             
-                             return (
-                                 <div key={i} className="flex gap-3 items-start">
-                                     <div className={`mt-0.5 ${isTargeted ? 'text-teal-500' : 'text-zinc-400'}`}>
-                                         <Check size={16} strokeWidth={3} />
-                                     </div>
-                                     <div>
-                                         <div className="flex items-center gap-2 mb-0.5">
-                                             <span className="text-sm font-bold text-zinc-900">{b.ingredient}</span>
-                                             {isTargeted && (
-                                                 <span className="text-[9px] font-bold bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded border border-teal-100 uppercase">Targeted</span>
-                                             )}
-                                         </div>
-                                         <p className="text-xs text-zinc-500 font-medium leading-snug">{b.description}</p>
-                                     </div>
-                                 </div>
-                             )
-                         })}
-                     </div>
-                 </div>
-             )}
-        </div>
-
-        {/* FIXED BOTTOM BAR */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-zinc-100 z-50 pb-safe">
-            <div className="flex gap-3 max-w-md mx-auto">
-                <button 
-                    onClick={onDiscard}
-                    className="flex-1 py-4 bg-zinc-100 text-zinc-600 rounded-2xl font-bold text-sm hover:bg-zinc-200 transition-colors"
-                >
-                    Cancel
-                </button>
-                <button 
-                    onClick={onAddToShelf}
-                    className="flex-[2] py-4 bg-teal-500 text-white rounded-2xl font-bold text-sm hover:bg-teal-600 transition-colors shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2"
-                >
-                    Add to Routine <ArrowRight size={18} />
-                </button>
+        {/* FIXED BOTTOM BAR - Only visible when unlocked */}
+        {isUnlocked && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-zinc-100 z-50 pb-safe animate-in slide-in-from-bottom-full duration-500">
+                <div className="flex gap-3 max-w-md mx-auto">
+                    <button 
+                        onClick={onDiscard}
+                        className="flex-1 py-4 bg-zinc-100 text-zinc-600 rounded-2xl font-bold text-sm hover:bg-zinc-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={onAddToShelf}
+                        className="flex-[2] py-4 bg-teal-500 text-white rounded-2xl font-bold text-sm hover:bg-teal-600 transition-colors shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2"
+                    >
+                        Add to Routine <ArrowRight size={18} />
+                    </button>
+                </div>
             </div>
-        </div>
+        )}
     </div>
   );
 };

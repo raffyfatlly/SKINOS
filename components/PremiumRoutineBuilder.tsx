@@ -223,9 +223,7 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
                 <div className="p-6 bg-zinc-50 rounded-[2rem] text-center border border-zinc-100 mt-8">
                     <Sparkles className="w-8 h-8 text-teal-500 mx-auto mb-3" />
                     <p className="text-xs text-zinc-500 leading-relaxed font-medium">
-                        These recommendations are generated based on your skin metrics: 
-                        <span className="font-bold text-zinc-700"> {user.skinType}</span> skin, 
-                        concern focus on <span className="font-bold text-zinc-700">{user.preferences?.goals?.[0] || 'Health'}</span>.
+                        These recommendations are generated based on your unique skin metrics and analysis.
                     </p>
                 </div>
             </div>
