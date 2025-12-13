@@ -47,8 +47,17 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
       }
   };
 
+  const getPageBackground = () => {
+      switch(verdict.color) {
+          case 'emerald': return 'bg-emerald-50';
+          case 'rose': return 'bg-rose-50';
+          case 'amber': return 'bg-amber-50';
+          default: return 'bg-zinc-50';
+      }
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-50 pb-32 animate-in slide-in-from-bottom-8 duration-500">
+    <div className={`min-h-screen pb-32 animate-in slide-in-from-bottom-8 duration-500 ${getPageBackground()}`}>
         {/* Header Image / Brand Area */}
         <div className="pt-12 px-6 pb-6 bg-white rounded-b-[2.5rem] shadow-sm border-b border-zinc-100 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-zinc-100 rounded-full -mr-10 -mt-10 opacity-50"></div>
@@ -71,7 +80,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
         </div>
 
         <div className="px-6 -mt-6 relative z-20">
-            {/* VERDICT CARD - COMPACT */}
+            {/* VERDICT CARD */}
             <div className={`rounded-[2rem] p-5 text-white shadow-xl bg-gradient-to-br ${getVerdictGradient()} relative overflow-hidden`}>
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
                 
@@ -190,7 +199,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
         </div>
 
         {/* FIXED BOTTOM BAR */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-zinc-100 z-50 pb-safe">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-zinc-100 z-50 pb-safe">
             <div className="flex gap-3 max-w-md mx-auto">
                 <button 
                     onClick={onDiscard}
@@ -200,7 +209,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
                 </button>
                 <button 
                     onClick={onAddToShelf}
-                    className="flex-[2] py-4 bg-zinc-900 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-900/20 flex items-center justify-center gap-2"
+                    className="flex-[2] py-4 bg-teal-500 text-white rounded-2xl font-bold text-sm hover:bg-teal-600 transition-colors shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2"
                 >
                     Add to Routine <ArrowRight size={18} />
                 </button>
