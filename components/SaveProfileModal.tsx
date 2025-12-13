@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { X, ShieldCheck, Cloud, UserCheck, Mail, Lock, ArrowRight, AlertTriangle, Loader, Check, Fingerprint, History, Sparkles } from 'lucide-react';
 import { signInWithGoogle, registerWithEmail, loginWithEmail } from '../services/firebase';
@@ -97,7 +98,7 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
   };
 
   const Feature = ({ icon: Icon, text }: { icon: any, text: string }) => (
-      <div className="flex items-center gap-2.5 text-zinc-600">
+      <div className="flex items-center gap-2 text-zinc-600">
           <div className="w-5 h-5 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 border border-teal-100/50">
               <Icon size={10} strokeWidth={3} />
           </div>
@@ -106,27 +107,28 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 relative animate-in zoom-in-95 shadow-2xl overflow-hidden border border-white/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="w-full max-w-[22rem] bg-white rounded-[2rem] p-6 relative animate-in zoom-in-95 shadow-2xl border border-white/50 max-h-[90vh] overflow-y-auto no-scrollbar">
         
         {/* Decorative Background Elements */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-teal-50 rounded-full -mr-20 -mt-20 blur-3xl opacity-50 pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-50 rounded-full -ml-16 -mb-16 blur-2xl opacity-50 pointer-events-none"></div>
 
-        <button onClick={onClose} className="absolute top-5 right-5 p-2 bg-white/80 rounded-full text-zinc-400 hover:text-zinc-600 hover:bg-white transition-all z-50 shadow-sm border border-zinc-100">
-          <X size={20} />
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/80 rounded-full text-zinc-400 hover:text-zinc-600 hover:bg-white transition-all z-50 shadow-sm border border-zinc-100">
+          <X size={18} />
         </button>
 
         <div className="relative z-10">
-            {/* Header */}
-            <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-gradient-to-tr from-teal-500 to-emerald-500 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-teal-500/20 rotate-3 transform">
-                     {isLoginView ? <UserCheck className="text-white" size={32} /> : <Fingerprint className="text-white" size={32} />}
+            {/* Header - Compacted */}
+            <div className="text-center mb-5 mt-2">
+                {/* UPDATED ICON STYLE: Mint Teal Icon on Light Background */}
+                <div className="w-14 h-14 bg-teal-50 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-lg shadow-teal-500/10 rotate-3 transform border border-teal-100">
+                     {isLoginView ? <UserCheck className="text-teal-500" size={28} /> : <Fingerprint className="text-teal-500" size={28} />}
                 </div>
-                <h2 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">
+                <h2 className="text-xl font-black text-zinc-900 tracking-tight mb-1">
                     {isLoginView ? "Welcome Back" : "Save Your Skin DNA"}
                 </h2>
-                <p className="text-sm font-medium text-zinc-500 leading-relaxed max-w-[260px] mx-auto">
+                <p className="text-xs font-medium text-zinc-500 leading-relaxed max-w-[240px] mx-auto">
                     {isLoginView 
                         ? "Log in to access your dashboard & history."
                         : "Create a free account to unlock progress tracking."
@@ -134,9 +136,9 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                 </p>
             </div>
 
-            {/* Benefits List (Only on Signup) */}
+            {/* Benefits List (Only on Signup) - Compacted */}
             {!isLoginView && (
-                <div className="bg-zinc-50/80 rounded-2xl p-4 mb-6 border border-zinc-100/80 space-y-2.5">
+                <div className="bg-zinc-50/80 rounded-xl p-3 mb-4 border border-zinc-100/80 space-y-2">
                     <Feature icon={Cloud} text="Cloud Sync Across Devices" />
                     <Feature icon={History} text="Track Monthly Progress" />
                     <Feature icon={Sparkles} text="Unlock Rescan & Search" />
@@ -144,41 +146,41 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
             )}
 
             {error && (
-                <div className="mb-6 bg-rose-50 p-3 rounded-xl flex gap-3 items-start text-left border border-rose-100 animate-in slide-in-from-top-2">
+                <div className="mb-4 bg-rose-50 p-3 rounded-xl flex gap-3 items-start text-left border border-rose-100 animate-in slide-in-from-top-2">
                     <AlertTriangle size={16} className="text-rose-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-rose-700 font-medium leading-snug">{error}</p>
                 </div>
             )}
 
-            {/* Google Sign In - Prominent */}
+            {/* Google Sign In - Prominent but Clean - Compacted */}
             <button 
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl bg-zinc-900 text-white font-bold text-sm uppercase tracking-wide hover:bg-zinc-800 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-xl shadow-zinc-900/10 mb-6 group"
+                className="w-full py-3 rounded-xl bg-white border border-zinc-200 text-zinc-700 font-bold text-xs hover:bg-zinc-50 hover:border-zinc-300 active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-sm mb-4 group"
             >
-                {loading ? <Loader size={18} className="animate-spin text-white/50" /> : (
+                {loading ? <Loader size={16} className="animate-spin text-zinc-400" /> : (
                     <>
-                        <div className="bg-white p-1 rounded-full"><GoogleLogo /></div>
+                        <div className="w-4 h-4 flex items-center justify-center"><GoogleLogo /></div>
                         <span>Continue with Google</span>
                     </>
                 )}
             </button>
 
-            <div className="relative flex py-2 items-center mb-6">
+            <div className="relative flex py-1 items-center mb-4">
                 <div className="flex-grow border-t border-zinc-100"></div>
-                <span className="flex-shrink-0 mx-4 text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Or use email</span>
+                <span className="flex-shrink-0 mx-3 text-zinc-400 text-[9px] font-bold uppercase tracking-widest">Or use email</span>
                 <div className="flex-grow border-t border-zinc-100"></div>
             </div>
 
-            {/* Email Form */}
-            <form onSubmit={handleEmailAuth} className="space-y-3">
-                <div className="space-y-3">
+            {/* Email Form - Compacted */}
+            <form onSubmit={handleEmailAuth} className="space-y-2.5">
+                <div className="space-y-2.5">
                     <input 
                         type="email" 
                         placeholder="Email Address"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition-all"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-xs font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition-all"
                         required
                     />
                     <input 
@@ -186,7 +188,7 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                         placeholder="Password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition-all"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-xs font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition-all"
                         required
                         minLength={6}
                     />
@@ -196,7 +198,7 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                             placeholder="Confirm Password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition-all"
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-xs font-bold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 transition-all"
                             required
                             minLength={6}
                         />
@@ -206,15 +208,18 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                 <button 
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 rounded-xl bg-white border-2 border-zinc-100 text-zinc-900 font-bold text-xs uppercase tracking-widest hover:border-teal-500 hover:text-teal-600 active:bg-zinc-50 transition-all flex items-center justify-center gap-2 mt-4"
+                    className="w-full py-3 rounded-xl bg-teal-500 text-white font-bold text-xs uppercase tracking-widest hover:bg-teal-600 shadow-lg shadow-teal-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
                 >
-                    {loading ? <Loader size={16} className="animate-spin text-zinc-400" /> : (
-                        isLoginView ? "Sign In with Email" : "Create Account"
+                    {loading ? <Loader size={16} className="animate-spin text-white/50" /> : (
+                        <>
+                            <Mail size={16} className="text-white" strokeWidth={2.5} />
+                            {isLoginView ? "Sign In with Email" : "Create Account"}
+                        </>
                     )}
                 </button>
             </form>
             
-            <div className="mt-6 text-center">
+            <div className="mt-5 text-center">
                 <button 
                     onClick={() => {
                         setIsLoginView(!isLoginView);
@@ -223,7 +228,7 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                         setPassword('');
                     }} 
                     disabled={loading} 
-                    className="text-xs text-zinc-500 hover:text-zinc-800 transition-colors font-medium group"
+                    className="text-[11px] text-zinc-500 hover:text-zinc-800 transition-colors font-medium group"
                 >
                     {isLoginView ? (
                         <>New here? <span className="font-bold text-teal-600 underline decoration-teal-200 group-hover:decoration-teal-500 underline-offset-2 transition-all">Create Account</span></>
