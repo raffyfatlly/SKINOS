@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { Product, UserProfile, SkinMetrics } from '../types';
-import { Plus, Droplet, Sun, Zap, Sparkles, AlertTriangle, Layers, AlertOctagon, Target, ShieldCheck, X, FlaskConical, Clock, Ban, ArrowRightLeft, CheckCircle2, Microscope, Dna, Palette, Brush, SprayCan, Stamp, DollarSign, TrendingUp, TrendingDown, Wallet, ArrowUpRight, Edit2, Save, Info, ArrowUpCircle } from 'lucide-react';
-import { auditProduct, analyzeShelfHealth, analyzeProductContext } from '../services/geminiService';
+import { Plus, Droplet, Sun, Zap, Sparkles, AlertTriangle, Layers, AlertOctagon, Target, ShieldCheck, X, FlaskConical, Clock, Ban, ArrowRightLeft, CheckCircle2, Microscope, Dna, Palette, Brush, SprayCan, Stamp, DollarSign, TrendingUp, TrendingDown, Wallet, ArrowUpRight, Edit2, Save, Info, ArrowUpCircle, Check } from 'lucide-react';
+import { auditProduct, analyzeShelfHealth, analyzeProductContext, getBuyingDecision } from '../services/geminiService';
 
 interface SmartShelfProps {
   products: Product[];
@@ -135,12 +135,31 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
       }
   }
 
-  const getSortedBenefits = (product: Product) => {
-      return [...product.benefits].sort((a, b) => {
-          const scoreA = userProfile.biometrics[a.target as keyof SkinMetrics] as number || 100;
-          const scoreB = userProfile.biometrics[b.target as keyof SkinMetrics] as number || 100;
-          return scoreA - scoreB;
-      });
+  const getVerdictGradient = (color: string) => {
+      switch(color) {
+          case 'emerald': return 'from-emerald-500 to-teal-600 shadow-emerald-200';
+          case 'rose': return 'from-rose-500 to-red-600 shadow-rose-200';
+          case 'amber': return 'from-amber-400 to-orange-500 shadow-amber-200';
+          case 'zinc': return 'from-zinc-500 to-zinc-600 shadow-zinc-200';
+          default: return 'from-zinc-500 to-zinc-600';
+      }
+  };
+
+  const getVerdictIcon = (decision: string) => {
+      switch(decision) {
+          case 'BUY': 
+          case 'SWAP':
+          case 'GREAT FIND':
+              return <Check size={20} className="text-white" />;
+          case 'AVOID':
+              return <X size={20} className="text-white" />;
+          case 'CAUTION':
+          case 'PASS':
+          case 'CONSIDER':
+              return <AlertTriangle size={20} className="text-white" />;
+          default:
+              return <Check size={20} className="text-white" />;
+      }
   };
 
   const renderActionPlan = () => {
@@ -499,252 +518,214 @@ const SmartShelf: React.FC<SmartShelfProps> = ({ products, onRemoveProduct, onSc
            </div>
        )}
 
-       {/* PRODUCT DETAIL MODAL */}
+       {/* PRODUCT DETAIL MODAL - REDESIGNED */}
        {selectedProduct && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-900/40 backdrop-blur-md animate-in fade-in">
-                <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 relative animate-in zoom-in-95 shadow-2xl overflow-y-auto max-h-[90vh] no-scrollbar">
-                    <button onClick={() => { setSelectedProduct(null); setIsEditingPrice(false); }} className="absolute top-6 right-6 p-2 bg-zinc-50 rounded-full text-zinc-400 hover:bg-zinc-100 transition-colors">
-                        <X size={20} />
-                    </button>
-
-                    <div className="text-center mb-8 mt-4">
-                        <div className={`w-20 h-20 mx-auto rounded-[1.5rem] ${getProductColor(selectedProduct.type)} flex items-center justify-center mb-5 shadow-sm`}>
-                            {getProductIcon(selectedProduct.type)}
-                        </div>
-                        <h3 className="text-2xl font-black text-zinc-900 leading-tight mb-2 tracking-tight">{selectedProduct.name}</h3>
-                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">{selectedProduct.brand}</p>
+           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in duration-300">
+                <div className="w-full max-w-md bg-zinc-50 rounded-t-[2.5rem] sm:rounded-[2.5rem] h-[90vh] sm:h-auto sm:max-h-[90vh] relative shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95">
+                    
+                    {/* Header Section */}
+                    <div className="bg-white px-6 pt-8 pb-6 rounded-b-[2.5rem] shadow-sm z-10 shrink-0 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-zinc-100 rounded-full -mr-10 -mt-10 opacity-50"></div>
                         
-                        {/* PRICE EDITOR */}
-                        <div className="flex items-center justify-center gap-2">
-                            {isEditingPrice ? (
-                                <div className="flex items-center gap-2 animate-in fade-in">
-                                    <span className="text-sm font-bold text-zinc-500">RM</span>
-                                    <input 
-                                        type="number" 
-                                        value={tempPrice}
-                                        onChange={(e) => setTempPrice(e.target.value)}
-                                        className="w-20 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1 text-sm font-bold focus:outline-none focus:border-teal-500"
-                                        autoFocus
-                                    />
-                                    <button onClick={handleSavePrice} className="p-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
-                                        <Save size={14} />
+                        <button onClick={() => { setSelectedProduct(null); setIsEditingPrice(false); }} className="absolute top-6 left-6 p-2 bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors z-10">
+                            <X size={20} />
+                        </button>
+                        
+                        <div className="flex flex-col items-center text-center relative z-10 mt-2">
+                             <div className={`w-16 h-16 rounded-2xl ${getProductColor(selectedProduct.type)} flex items-center justify-center mb-4 shadow-lg border border-white/50`}>
+                                 {getProductIcon(selectedProduct.type)}
+                             </div>
+                             <h2 className="text-xl font-black text-zinc-900 leading-tight mb-1 max-w-xs">{selectedProduct.name}</h2>
+                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{selectedProduct.brand || 'Unknown Brand'}</p>
+                             
+                             {/* PRICE EDITOR */}
+                             <div className="mt-3 flex items-center justify-center gap-2">
+                                {isEditingPrice ? (
+                                    <div className="flex items-center gap-2 animate-in fade-in">
+                                        <span className="text-sm font-bold text-zinc-500">RM</span>
+                                        <input 
+                                            type="number" 
+                                            value={tempPrice}
+                                            onChange={(e) => setTempPrice(e.target.value)}
+                                            className="w-20 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1 text-sm font-bold focus:outline-none focus:border-teal-500"
+                                            autoFocus
+                                        />
+                                        <button onClick={handleSavePrice} className="p-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
+                                            <Save size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => handleStartEditPrice(selectedProduct)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-100 rounded-lg text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200 transition-colors group"
+                                    >
+                                        <DollarSign size={10} />
+                                        <span className="text-[10px] font-bold text-zinc-700">RM {selectedProduct.estimatedPrice || 45}</span>
+                                        <Edit2 size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </button>
-                                </div>
-                            ) : (
-                                <button 
-                                    onClick={() => handleStartEditPrice(selectedProduct)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-zinc-50 text-zinc-500 hover:text-zinc-700 transition-colors group"
-                                >
-                                    <span className="text-sm font-bold">RM {selectedProduct.estimatedPrice || 45}</span>
-                                    <Edit2 size={12} className="opacity-50 group-hover:opacity-100" />
-                                </button>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="space-y-6">
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-safe">
                         {(() => {
-                             const audit = auditProduct(selectedProduct, userProfile);
-                             const critical = audit.warnings.some(w => w.severity === 'CRITICAL');
-                             const caution = audit.warnings.some(w => w.severity === 'CAUTION') && !critical;
-                             
-                             const score = Number(audit.adjustedScore);
-                             const isLowScore = score < 50;
-                             
-                             const cardStyle = caution ? 'bg-amber-50 border-amber-100' :
-                                               critical ? 'bg-rose-50 border-rose-100' : 
-                                               isLowScore ? 'bg-zinc-50 border-zinc-200' : 
-                                               'bg-emerald-50 border-emerald-100';
-
-                             const textStyle = caution ? 'text-amber-700' :
-                                               critical ? 'text-rose-700' : 
-                                               isLowScore ? 'text-zinc-600' :
-                                               'text-emerald-700';
-
-                             const scoreStyle = caution ? 'text-amber-600' :
-                                                critical ? 'text-rose-600' : 
-                                                isLowScore ? 'text-zinc-500' :
-                                                'text-emerald-600';
-
-                             const label = caution ? 'Caution Advised' :
-                                           critical ? 'Avoid Use' : 
-                                           isLowScore ? 'Low Compatibility' : 
-                                           'Excellent Fit';
-
-                             return (
-                                 <div className={`p-6 rounded-[1.5rem] border ${cardStyle}`}>
-                                     <div className="flex justify-between items-center mb-2">
-                                         <span className={`text-xs font-bold uppercase tracking-wide ${textStyle}`}>
-                                             {label}
-                                         </span>
-                                         <span className={`text-3xl font-black ${scoreStyle}`}>{score}%</span>
-                                     </div>
-                                     {(caution || critical) ? (
-                                         <p className={`text-sm font-medium leading-relaxed ${textStyle}`}>{audit.warnings[0].reason}</p>
-                                     ) : isLowScore ? (
-                                          <p className="text-sm text-zinc-600 font-medium leading-relaxed">{audit.analysisReason}</p>
-                                     ) : (
-                                         <p className="text-sm text-emerald-800 font-medium leading-relaxed">Formulation aligns with your current skin metrics.</p>
-                                     )}
-                                 </div>
-                             )
-                        })()}
-
-                        {(() => {
-                             // Context Check
-                             const otherProducts = products.filter(p => p.id !== selectedProduct.id);
-                             const context = analyzeProductContext(selectedProduct, otherProducts);
-                             const isRisky = shelfIQ.analysis.riskyProducts.some(r => r.name === selectedProduct.name);
-
-                             // If risky but not caught by audit (rare, usually shelf specific), fall back to shelf reason
-                             if (isRisky && !auditProduct(selectedProduct, userProfile).warnings.length) {
-                                const shelfRisk = shelfIQ.analysis.riskyProducts.find(r => r.name === selectedProduct.name);
-                                if (shelfRisk) {
-                                    const isShelfCritical = shelfRisk.severity === 'CRITICAL';
-                                    return (
-                                        <div className={`p-6 rounded-[1.5rem] border ${isShelfCritical ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'}`}>
-                                            <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${isShelfCritical ? 'text-rose-700' : 'text-amber-700'}`}>
-                                                <AlertTriangle size={14} /> Biometric Alert
-                                            </h4>
-                                            <p className={`text-sm font-medium leading-relaxed ${isShelfCritical ? 'text-rose-800' : 'text-amber-800'}`}>
-                                                {shelfRisk.reason}
-                                            </p>
-                                        </div>
-                                    )
-                                }
-                             }
-                             
-                             if (context.conflicts.length > 0) {
-                                 return (
-                                     <div className="p-6 rounded-[1.5rem] bg-indigo-50 border border-indigo-100">
-                                          <h4 className="text-xs font-bold text-indigo-700 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                              <Clock size={14} /> Usage Protocol
-                                          </h4>
-                                          <p className="text-sm text-indigo-800 font-medium leading-relaxed mb-3">
-                                              Conflict detected. Do not use in the same session as:
-                                          </p>
-                                          {context.conflicts.map((c, i) => (
-                                              <div key={i} className="flex items-start gap-2 text-indigo-600 bg-white p-2 rounded-lg border border-indigo-100 mb-2">
-                                                  <AlertOctagon size={14} className="mt-0.5 shrink-0" />
-                                                  <span className="text-xs font-bold leading-tight">{c}</span>
-                                              </div>
-                                          ))}
-                                     </div>
-                                 )
-                             }
-                             
-                             if (context.typeCount > 0) {
-                                return (
-                                    <div className="p-6 rounded-[1.5rem] bg-amber-50 border border-amber-100">
-                                        <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <ArrowRightLeft size={14} /> Redundancy
-                                        </h4>
-                                        <p className="text-xs text-amber-800 font-medium leading-relaxed">
-                                            You have {context.typeCount} other {selectedProduct.type.toLowerCase()}{context.typeCount > 1 ? 's' : ''}.
-                                        </p>
-                                    </div>
-                                )
-                             }
-
-                             return null;
-                        })()}
-                        
-                        {/* FORMULA ANALYSIS LIST (Combined Risks and Benefits) */}
-                        {(() => {
-                            const audit = auditProduct(selectedProduct, userProfile);
-                            const risks = audit.warnings;
-                            const benefits = selectedProduct.benefits;
+                            const decision = getBuyingDecision(selectedProduct, products, userProfile);
+                            const { verdict, audit } = decision;
                             
-                            if (risks.length === 0 && benefits.length === 0) return null;
+                            // Context Check (existing logic)
+                            const otherProducts = products.filter(p => p.id !== selectedProduct.id);
+                            const context = analyzeProductContext(selectedProduct, otherProducts);
+                            const conflicts = context.conflicts;
+                            const redundancy = context.typeCount;
 
                             return (
-                                <div className="p-6 rounded-[1.5rem] bg-zinc-50 border border-zinc-100">
-                                    <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <FlaskConical size={14} /> Formula Analysis
-                                    </h4>
-                                    <ul className="space-y-3">
-                                        {/* Risks First */}
-                                        {risks.map((risk, i) => {
-                                            const isCrit = risk.severity === 'CRITICAL';
-                                            return (
-                                                <li key={`r-${i}`} className={`flex items-start gap-3 bg-white p-3 rounded-2xl border shadow-sm ${isCrit ? 'border-rose-100' : 'border-amber-100'}`}>
-                                                    <div className="mt-0.5 shrink-0">
-                                                        {isCrit ? <Ban size={16} className="text-rose-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                         <div className="flex justify-between items-start mb-1">
-                                                             <span className={`text-xs font-bold ${isCrit ? 'text-rose-950' : 'text-amber-950'}`}>Safety Alert</span>
-                                                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wide ${isCrit ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                                                                 {isCrit ? 'Issue' : 'Caution'}
-                                                             </span>
-                                                         </div>
-                                                         <p className="text-[11px] text-zinc-600 font-medium leading-snug">
-                                                             {risk.reason}
-                                                         </p>
-                                                    </div>
-                                                </li>
-                                            )
-                                        })}
+                                <>
+                                    {/* VERDICT CARD */}
+                                    <div className={`rounded-[2rem] p-5 text-white shadow-xl bg-gradient-to-br ${getVerdictGradient(verdict.color)} relative overflow-hidden`}>
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
+                                        
+                                        <div className="flex items-center gap-4 relative z-10">
+                                            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shrink-0 shadow-sm">
+                                                {getVerdictIcon(verdict.decision)}
+                                            </div>
+                                            
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5 mb-0.5 opacity-90">
+                                                    <Zap size={10} className="fill-current" />
+                                                    <span className="text-[9px] font-bold uppercase tracking-widest">Analysis</span>
+                                                </div>
+                                                <h2 className="text-xl font-black tracking-tight leading-none truncate">{verdict.title}</h2>
+                                            </div>
 
-                                        {/* Benefits Next */}
-                                        {getSortedBenefits(selectedProduct).slice(0, 3).map((b, i) => {
-                                             const userScore = userProfile.biometrics[b.target as keyof SkinMetrics] as number || 0;
-                                             const isCriticalNeed = userScore < 50;
-                                             // Only show benefits if not a complete disaster
-                                             const audit = auditProduct(selectedProduct, userProfile);
-                                             const isTotalMismatch = audit.adjustedScore < 30;
-                                             
-                                             if (isTotalMismatch) return null;
+                                            <div className="text-right bg-black/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-sm">
+                                                <span className="block text-[9px] font-bold uppercase tracking-wide opacity-80 mb-0.5">Match</span>
+                                                <span className="text-xl font-black leading-none">{selectedProduct.suitabilityScore}%</span>
+                                            </div>
+                                        </div>
 
-                                             return (
-                                                 <li key={`b-${i}`} className="flex items-start gap-3 bg-white p-3 rounded-2xl border border-zinc-100 shadow-sm">
-                                                     <div className={`mt-0.5 shrink-0`}>
-                                                         {isCriticalNeed ? <ShieldCheck size={16} className="text-emerald-500" /> : 
-                                                          <Zap size={16} className="text-teal-500" />}
-                                                     </div>
-                                                     
-                                                     <div className="flex-1">
-                                                         <div className="flex justify-between items-start mb-1">
-                                                             <span className="text-xs font-bold text-zinc-900">{b.ingredient}</span>
-                                                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wide ${
-                                                                 isCriticalNeed ? 'bg-emerald-100 text-emerald-600' :
-                                                                 'bg-teal-50 text-teal-600'
-                                                             }`}>
-                                                                 {isCriticalNeed ? 'Priority Fix' : 'Effective'}
-                                                             </span>
-                                                         </div>
-                                                         <p className="text-xs text-zinc-600 font-medium leading-snug">
-                                                             {b.description}
-                                                         </p>
-                                                     </div>
-                                                 </li>
-                                             )
-                                        })}
-                                    </ul>
-                                </div>
-                            )
+                                        <div className="mt-4 pt-3 border-t border-white/10 relative z-10">
+                                            <p className="text-xs font-medium leading-relaxed opacity-95">
+                                                {verdict.description}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* CRITICAL ALERTS */}
+                                    {audit.warnings.length > 0 && (
+                                        <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                                            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <AlertOctagon size={14} className="text-rose-500" /> Risk Analysis
+                                            </h3>
+                                            <div className="space-y-3">
+                                                {audit.warnings.map((w, i) => (
+                                                    <div key={i} className={`flex gap-3 p-3 rounded-xl border ${w.severity === 'CRITICAL' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'}`}>
+                                                        <div className="mt-0.5">
+                                                            {w.severity === 'CRITICAL' ? <AlertOctagon size={16} className="text-rose-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
+                                                        </div>
+                                                        <div>
+                                                            <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded mb-1 inline-block ${w.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                {w.severity}
+                                                            </span>
+                                                            <p className={`text-xs font-medium leading-snug ${w.severity === 'CRITICAL' ? 'text-rose-800' : 'text-amber-800'}`}>
+                                                                {w.reason}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* CONFLICTS */}
+                                    {conflicts.length > 0 && (
+                                        <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                                            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <Clock size={14} className="text-indigo-500" /> Routine Conflicts
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {conflicts.map((c, i) => (
+                                                    <div key={i} className="flex gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-100">
+                                                        <AlertTriangle size={16} className="text-indigo-500 mt-0.5" />
+                                                        <p className="text-xs font-medium text-indigo-800 leading-snug">{c}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* REDUNDANCY */}
+                                    {redundancy > 0 && conflicts.length === 0 && (
+                                         <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                                            <h3 className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                <ArrowRightLeft size={14} /> Duplicate Type
+                                            </h3>
+                                            <p className="text-xs text-amber-800 font-medium leading-relaxed bg-amber-50 p-3 rounded-xl border border-amber-100">
+                                                You have {redundancy} other {selectedProduct.type.toLowerCase()}{redundancy > 1 ? 's' : ''} in your routine.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* BENEFITS */}
+                                    {selectedProduct.benefits.length > 0 && (
+                                        <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
+                                            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <ShieldCheck size={14} className="text-teal-500" /> Key Benefits
+                                            </h3>
+                                            <div className="space-y-3">
+                                                {selectedProduct.benefits.slice(0, 3).map((b, i) => {
+                                                    const metricScore = userProfile.biometrics[b.target] || 0;
+                                                    const isTargeted = metricScore < 60;
+                                                    
+                                                    return (
+                                                        <div key={i} className="flex gap-3 items-start">
+                                                            <div className={`mt-0.5 ${isTargeted ? 'text-teal-500' : 'text-zinc-400'}`}>
+                                                                <Check size={16} strokeWidth={3} />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-0.5">
+                                                                    <span className="text-sm font-bold text-zinc-900">{b.ingredient}</span>
+                                                                    {isTargeted && (
+                                                                        <span className="text-[9px] font-bold bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded border border-teal-100 uppercase">Targeted</span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-zinc-500 font-medium leading-snug">{b.description}</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* INGREDIENTS */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 px-1">Active Ingredients</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedProduct.ingredients.slice(0, 10).map((ing, i) => (
+                                                <span key={i} className="px-3 py-1.5 bg-white text-zinc-600 text-[10px] font-bold rounded-lg uppercase border border-zinc-100">
+                                                    {ing}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="h-4"></div>
+
+                                    {/* REMOVE BUTTON */}
+                                    <button 
+                                        onClick={() => {
+                                            onRemoveProduct(selectedProduct.id);
+                                            setSelectedProduct(null);
+                                        }}
+                                        className="w-full py-4 rounded-[1.5rem] border border-rose-200 bg-rose-50 text-rose-500 font-bold text-xs uppercase hover:bg-rose-100 transition-colors"
+                                    >
+                                        Remove from Shelf
+                                    </button>
+                                </>
+                            );
                         })()}
-
-                        <div>
-                            <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Active Ingredients</h4>
-                            <div className="flex flex-wrap gap-2">
-                                {selectedProduct.ingredients.slice(0, 8).map((ing, i) => (
-                                    <span key={i} className="px-3 py-1.5 bg-zinc-50 text-zinc-600 text-[10px] font-bold rounded-lg uppercase border border-zinc-100">
-                                        {ing}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-
-                        <button 
-                            onClick={() => {
-                                onRemoveProduct(selectedProduct.id);
-                                setSelectedProduct(null);
-                            }}
-                            className="w-full py-4 mt-4 rounded-2xl border border-rose-200 text-rose-500 font-bold text-xs uppercase hover:bg-rose-50 transition-colors"
-                        >
-                            Remove from Shelf
-                        </button>
                     </div>
                 </div>
            </div>
