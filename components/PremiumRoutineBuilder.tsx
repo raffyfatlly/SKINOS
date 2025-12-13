@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { UserProfile } from '../types';
 import { generateRoutineRecommendations } from '../services/geminiService';
+import { startCheckout } from '../services/stripeService';
 import { Sparkles, ArrowLeft, Sun, Moon, DollarSign, Star, Zap, ShieldCheck, Loader, ChevronDown, CheckCircle2, Crown, Lock } from 'lucide-react';
 
 interface RoutineProduct {
@@ -34,10 +35,12 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
     const [loading, setLoading] = useState(true);
     const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
     
-    // Simulate payment lock for demonstration
-    const [isPaid, setIsPaid] = useState(true); 
+    // Check if user is premium
+    const isPaid = !!user.isPremium; 
 
     useEffect(() => {
+        if (!isPaid) return; // Don't fetch if not paid
+
         const fetchRoutine = async () => {
             setLoading(true);
             try {
@@ -56,7 +59,7 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
             }
         };
         fetchRoutine();
-    }, [user]);
+    }, [user, isPaid]);
 
     const toggleStep = (key: string) => {
         setExpandedSteps(prev => ({ ...prev, [key]: !prev[key] }));
@@ -89,6 +92,27 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
         }
     };
 
+    // If not paid, show paywall immediately
+    if (!isPaid) {
+        return (
+            <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md mb-6 border border-white/20 shadow-lg">
+                    <Lock size={32} />
+                </div>
+                <h2 className="text-3xl font-black mb-4">Unlock Premium Routine</h2>
+                <p className="text-zinc-400 max-w-sm mx-auto mb-8">Get personalized 3-tier product recommendations (Budget, Value, Luxury) for every step of your routine.</p>
+                <button 
+                    onClick={startCheckout}
+                    className="bg-gradient-to-r from-teal-400 to-emerald-500 text-white px-8 py-4 rounded-full font-bold text-lg shadow-lg hover:scale-105 transition-transform active:scale-95 flex items-center gap-2"
+                >
+                    <Sparkles size={18} className="text-yellow-300" /> Unlock Now
+                </button>
+                <button onClick={onBack} className="mt-6 text-sm text-zinc-500 font-bold hover:text-white transition-colors">No Thanks</button>
+            </div>
+        );
+    }
+
     if (loading) {
         return (
             <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center p-6 text-center">
@@ -100,24 +124,6 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
                 </div>
                 <h2 className="text-2xl font-black text-zinc-900 mb-2">Building Your Routine...</h2>
                 <p className="text-zinc-500 max-w-xs mx-auto text-sm">Our AI is analyzing thousands of products to find the perfect matches for your skin profile.</p>
-            </div>
-        );
-    }
-
-    if (!isPaid) {
-        // Placeholder for paywall UI
-        return (
-            <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md mb-6 border border-white/20">
-                    <Lock size={32} />
-                </div>
-                <h2 className="text-3xl font-black mb-4">Unlock Premium Routine</h2>
-                <p className="text-zinc-400 max-w-sm mx-auto mb-8">Get personalized 3-tier product recommendations (Budget, Value, Luxury) for every step of your routine.</p>
-                <button onClick={() => setIsPaid(true)} className="bg-gradient-to-r from-teal-400 to-emerald-500 text-white px-8 py-4 rounded-full font-bold text-lg shadow-lg hover:scale-105 transition-transform active:scale-95">
-                    Unlock Now
-                </button>
-                <button onClick={onBack} className="mt-6 text-sm text-zinc-500 font-bold hover:text-white transition-colors">No Thanks</button>
             </div>
         );
     }

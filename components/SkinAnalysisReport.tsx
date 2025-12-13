@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
+import { startCheckout } from '../services/stripeService';
 import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck, ChevronDown, Lock, Crown, ListChecks } from 'lucide-react';
 
 // --- SUB COMPONENTS ---
@@ -264,12 +265,19 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
   const age = userProfile.age || 25; 
   
   const [selectedMetric, setSelectedMetric] = useState<keyof SkinMetrics | null>(null);
-  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false);
   const [complexity, setComplexity] = useState<'BASIC' | 'ADVANCED'>(userProfile.preferences?.complexity === 'ADVANCED' ? 'ADVANCED' : 'BASIC');
   const [isTreatmentExpanded, setIsTreatmentExpanded] = useState(false);
   
   const [isChartVisible, setIsChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
+
+  // If user is premium, features are unlocked by default
+  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(!!userProfile.isPremium);
+
+  // Sync state if userProfile updates
+  useEffect(() => {
+    setIsPremiumUnlocked(!!userProfile.isPremium);
+  }, [userProfile.isPremium]);
 
   useEffect(() => {
       const observer = new IntersectionObserver(
@@ -724,7 +732,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                       <div className="relative inline-flex group rounded-full p-[2px] overflow-hidden shadow-[0_10px_20px_rgba(0,0,0,0.1)]">
                           <div className="absolute inset-[-100%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2E8F0_0%,#E2E8F0_50%,#0F766E_100%)]" />
                           <button 
-                            onClick={() => setIsPremiumUnlocked(true)}
+                            onClick={startCheckout}
                             className="relative z-10 bg-white text-teal-900 px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                           >
                               <Sparkles size={14} className="text-amber-400 fill-amber-400 group-hover:rotate-12 transition-transform" /> Unlock Full Access

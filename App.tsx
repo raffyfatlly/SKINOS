@@ -62,15 +62,48 @@ const App: React.FC = () => {
       setShowSaveModal(true);
   };
 
+  // --- PERSISTENCE HELPER ---
+  const persistState = (newUser: UserProfile, newShelf: Product[]) => {
+      setUserProfile(newUser);
+      setShelf(newShelf);
+      saveUserData(newUser, newShelf);
+  };
+
   // --- INITIALIZATION ---
   useEffect(() => {
     const init = async () => {
+      // 1. Check for Payment Success Flag in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const isPaymentSuccess = urlParams.get('payment') === 'success';
+
       const data = await loadUserData();
-      if (data.user) {
-        setUserProfile(data.user);
+      
+      let currentUser = data.user;
+
+      // Handle Payment Success Logic
+      if (isPaymentSuccess && currentUser) {
+          currentUser = { ...currentUser, isPremium: true };
+          // Save immediately
+          saveUserData(currentUser, data.shelf);
+          
+          // Clean URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          setNotification({
+             type: 'GENERIC',
+             title: 'Premium Unlocked!',
+             description: 'You now have unlimited access to all features.',
+             actionLabel: 'Great',
+             onAction: () => {}
+          });
+      }
+
+      if (currentUser) {
+        setUserProfile(currentUser);
         setShelf(data.shelf);
-        if (data.user.hasScannedFace) {
-            setCurrentView(AppView.DASHBOARD);
+        if (currentUser.hasScannedFace) {
+            // If payment just happened, go to Dashboard or Routine
+            setCurrentView(isPaymentSuccess ? AppView.DASHBOARD : AppView.DASHBOARD);
         } else {
             setCurrentView(AppView.FACE_SCANNER);
         }
@@ -84,7 +117,6 @@ const App: React.FC = () => {
     const unsubscribe = auth ? onAuthStateChanged(auth, async (user) => {
         if (user) {
             // DETECT LOGIN FLOW: If we are currently on Landing/Onboarding, show loading
-            // This prevents "stuck" UI while we fetch cloud data
             const isLoginFlow = viewRef.current === AppView.LANDING || viewRef.current === AppView.ONBOARDING;
             
             if (isLoginFlow) {
@@ -118,12 +150,6 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // --- PERSISTENCE HELPER ---
-  const persistState = (newUser: UserProfile, newShelf: Product[]) => {
-      setUserProfile(newUser);
-      setShelf(newShelf);
-      saveUserData(newUser, newShelf);
-  };
 
   // --- HANDLERS ---
   const handleOnboardingComplete = (data: { name: string; age: number; skinType: SkinType }) => {
@@ -133,7 +159,8 @@ const App: React.FC = () => {
           skinType: data.skinType,
           hasScannedFace: false,
           biometrics: {} as any, 
-          isAnonymous: true
+          isAnonymous: true,
+          isPremium: false // Default to false
       };
       setUserProfile(newUser);
       setCurrentView(AppView.FACE_SCANNER);

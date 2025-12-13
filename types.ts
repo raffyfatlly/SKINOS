@@ -59,6 +59,7 @@ export interface UserProfile {
   faceImage?: string; // Base64 Data URL
   isAnonymous?: boolean; // For lazy signup detection
   preferences?: UserPreferences;
+  isPremium?: boolean; // NEW: Tracks payment status
 }
 
 export interface IngredientRisk {
