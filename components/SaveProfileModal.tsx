@@ -129,7 +129,7 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
           case 'RESCAN_FACE':
               return {
                   title: "Track Skin Health",
-                  desc: "Save your baseline to measure how your metrics improve over time.",
+                  desc: "Create a free account to save your baseline and measure how your metrics improve over time.",
                   icon: Sparkles
               };
           case 'VIEW_PROGRESS':
