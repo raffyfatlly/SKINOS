@@ -761,7 +761,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                                
                                {/* Progress Bar */}
                                <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden relative z-10">
-                                    <div className={`absolute top-0 bottom-0 left-0 rounded-full transition-all duration-1000 ${progressPercent >= 100 ? 'bg-teal-500' : 'bg-zinc-800'}`} style={{ width: `${progressPercent}%` }}></div>
+                                    <div className="absolute top-0 bottom-0 left-0 rounded-full transition-all duration-1000 bg-teal-500" style={{ width: `${progressPercent}%` }}></div>
                                </div>
                                
                                <div className="flex justify-between mt-1.5 relative z-10">
