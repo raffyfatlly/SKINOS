@@ -128,46 +128,51 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
 
             {/* DETAILED ANALYSIS - LOCKED FOR PREMIUM */}
             <div className="relative mt-6 px-6">
-                 {/* LOCKED OVERLAY - Covers details section */}
+                 {/* LOCKED OVERLAY */}
                  {!isUnlocked && (
-                     <div className="absolute inset-x-6 top-0 bottom-0 z-30 flex flex-col items-center pt-8 bg-gradient-to-b from-white/40 to-white/90 backdrop-blur-[2px] rounded-[2rem] border border-white/50">
+                     <div className="absolute inset-x-0 -top-6 bottom-0 z-30 flex flex-col items-center justify-start pt-24 bg-gradient-to-b from-white/0 via-white/60 to-white/95 backdrop-blur-[1px] rounded-[2rem]">
                          {/* Lock Icon */}
-                         <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mb-4 shadow-xl border border-zinc-100 animate-in zoom-in duration-300">
-                             <Lock className="text-zinc-900" size={20} />
+                         <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-xl border border-zinc-100 rotate-3 animate-in zoom-in duration-300">
+                             <Lock className="text-teal-600" size={24} />
                          </div>
                          
-                         <h2 className="text-xl font-black text-zinc-900 mb-2 text-center tracking-tight">Unlock Safety Report</h2>
-                         <p className="text-zinc-500 font-medium text-center mb-8 max-w-[200px] text-xs leading-relaxed">
-                            See detailed risk analysis, ingredient warnings, and routine conflicts.
+                         <h2 className="text-xl font-black text-zinc-900 mb-2 text-center tracking-tight drop-shadow-sm">Reveal Safety Details</h2>
+                         <p className="text-zinc-600 font-medium text-center mb-8 max-w-[220px] text-xs leading-relaxed drop-shadow-sm">
+                            See detailed risks, ingredient conflicts, and the full "Why" behind this verdict.
                          </p>
 
                          {/* Spinning Unlock Button */}
-                         <div className="relative inline-flex group rounded-full p-[2px] overflow-hidden shadow-[0_10px_20px_rgba(0,0,0,0.1)]">
+                         <div className="relative inline-flex group rounded-full p-[2px] overflow-hidden shadow-[0_10px_20px_rgba(0,0,0,0.1)] hover:shadow-teal-500/20 transition-all">
                             <div className="absolute inset-[-100%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2E8F0_0%,#E2E8F0_50%,#0F766E_100%)]" />
                             <button 
                                 onClick={() => setIsUnlocked(true)}
-                                className="relative z-10 bg-white text-teal-900 px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                                className="relative z-10 bg-white text-teal-900 px-8 py-3.5 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                             >
-                                <Sparkles size={14} className="text-amber-400 fill-amber-400 group-hover:rotate-12 transition-transform" /> Unlock Full Access
+                                <Sparkles size={14} className="text-amber-400 fill-amber-400 group-hover:rotate-12 transition-transform" /> Reveal Full Analysis
                             </button>
                         </div>
                         
-                        <button onClick={onDiscard} className="mt-8 text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600 transition-colors px-4 py-2">
-                            Cancel Analysis
+                        <button onClick={onDiscard} className="mt-6 text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-zinc-700 transition-colors px-4 py-2">
+                            No Thanks, Cancel
                         </button>
                      </div>
                  )}
 
                  {/* MAIN CONTENT (Blurred if Locked) */}
-                 <div className={`space-y-4 transition-all duration-700 ${!isUnlocked ? 'filter blur-md opacity-50 pointer-events-none select-none' : ''}`}>
-                    {/* CRITICAL ALERTS */}
-                    {(audit.warnings.length > 0 || !isUnlocked) && (
+                 {/* UPDATE: Reduced blur to sm (4px), increased opacity to 100, removed grayscale so visuals pop */}
+                 <div className={`space-y-4 transition-all duration-700 ${!isUnlocked ? 'filter blur-sm opacity-100 pointer-events-none select-none' : ''}`}>
+                    {/* CRITICAL ALERTS - If none, we show a "Safe" card to blur so it looks populated */}
+                    {(audit.warnings.length > 0 || !isUnlocked) ? (
                         <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-100 shadow-sm">
                             <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <AlertOctagon size={14} className="text-rose-500" /> Risk Analysis
                             </h3>
                             <div className="space-y-3">
-                                {audit.warnings.length > 0 ? audit.warnings.map((w, i) => (
+                                {(audit.warnings.length > 0 ? audit.warnings : [
+                                    // Dummy warnings for visual blur effect if actual list is empty
+                                    { severity: 'CAUTION', reason: "Contains potential irritants for sensitive skin types." },
+                                    { severity: 'CRITICAL', reason: "High comedogenic rating detected." }
+                                ]).map((w, i) => (
                                     <div key={i} className={`flex gap-3 p-3 rounded-xl border ${w.severity === 'CRITICAL' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'}`}>
                                         <div className="mt-0.5">
                                             {w.severity === 'CRITICAL' ? <AlertOctagon size={16} className="text-rose-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
@@ -181,14 +186,16 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
                                             </p>
                                         </div>
                                     </div>
-                                )) : (
-                                    // Dummy content for blur visual if no risks
-                                    <div className="flex gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-100">
-                                        <ShieldCheck size={16} className="text-emerald-500 mt-0.5" />
-                                        <p className="text-xs font-medium text-zinc-600 leading-snug">No major risks detected for your skin profile.</p>
-                                    </div>
-                                )}
+                                ))}
                             </div>
+                        </div>
+                    ) : (
+                        // If unlocked and truly safe
+                        <div className="bg-white p-5 rounded-[1.5rem] border border-emerald-100 bg-emerald-50/50 shadow-sm">
+                             <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <ShieldCheck size={14} /> Risk Analysis
+                            </h3>
+                            <p className="text-xs text-emerald-800 font-medium">No critical risks identified for your skin profile.</p>
                         </div>
                     )}
 
@@ -199,17 +206,15 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
                                 <Clock size={14} className="text-indigo-500" /> Routine Conflicts
                             </h3>
                             <div className="space-y-2">
-                                {shelfConflicts.length > 0 ? shelfConflicts.map((c, i) => (
+                                {(shelfConflicts.length > 0 ? shelfConflicts : [
+                                    "Conflict with Retinol serum in PM routine.",
+                                    "Duplicate active ingredient detected."
+                                ]).map((c, i) => (
                                     <div key={i} className="flex gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-100">
                                         <AlertTriangle size={16} className="text-indigo-500 mt-0.5" />
                                         <p className="text-xs font-medium text-indigo-800 leading-snug">{c}</p>
                                     </div>
-                                )) : (
-                                     <div className="flex gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-100">
-                                        <Check size={16} className="text-zinc-400 mt-0.5" />
-                                        <p className="text-xs font-medium text-zinc-600 leading-snug">No conflicts with your current shelf.</p>
-                                    </div>
-                                )}
+                                ))}
                             </div>
                         </div>
                     )}
@@ -221,8 +226,11 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
                                 <ShieldCheck size={14} className="text-teal-500" /> Key Benefits
                             </h3>
                             <div className="space-y-3">
-                                {product.benefits.length > 0 ? product.benefits.slice(0, 3).map((b, i) => {
-                                    const metricScore = user.biometrics[b.target] || 0;
+                                {(product.benefits.length > 0 ? product.benefits.slice(0, 3) : [
+                                    { target: 'hydration', ingredient: 'Hyaluronic Acid', description: 'Deeply hydrates skin layers.' },
+                                    { target: 'redness', ingredient: 'Centella Asiatica', description: 'Calms inflammation.' }
+                                ] as any[]).map((b, i) => {
+                                    const metricScore = user.biometrics[b.target as keyof typeof user.biometrics] || 0;
                                     const isTargeted = metricScore < 60;
                                     
                                     return (
@@ -241,12 +249,7 @@ const BuyingAssistant: React.FC<BuyingAssistantProps> = ({ product, user, shelf,
                                             </div>
                                         </div>
                                     )
-                                }) : (
-                                    <div className="flex gap-3 items-start">
-                                        <div className="mt-0.5 text-zinc-400"><Check size={16} /></div>
-                                        <p className="text-xs text-zinc-500 font-medium leading-snug">General maintenance support.</p>
-                                    </div>
-                                )}
+                                })}
                             </div>
                         </div>
                     )}

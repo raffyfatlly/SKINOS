@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   AppView, 
   UserProfile, 
@@ -27,7 +27,7 @@ import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 
 // Icons
-import { ScanFace, LayoutGrid, User, Search, Home } from 'lucide-react';
+import { ScanFace, LayoutGrid, User, Search, Home, Loader } from 'lucide-react';
 
 const App: React.FC = () => {
   // --- STATE ---
@@ -36,6 +36,10 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [shelf, setShelf] = useState<Product[]>([]);
   
+  // Loading State for smooth transitions
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const viewRef = useRef<AppView>(AppView.LANDING); // Ref to track view inside callbacks
+
   // Temporary state for the product currently being analyzed in Buying Assistant
   const [analyzedProduct, setAnalyzedProduct] = useState<Product | null>(null);
   
@@ -48,6 +52,9 @@ const App: React.FC = () => {
 
   const [notification, setNotification] = useState<{ type: NotificationType, title: string, description: string, actionLabel: string, onAction: () => void } | null>(null);
   const [aiQuery, setAiQuery] = useState<string | null>(null);
+
+  // Update ref whenever view changes
+  useEffect(() => { viewRef.current = currentView; }, [currentView]);
 
   // --- HELPER: OPEN AUTH MODAL WITH CONTEXT ---
   const openAuth = (trigger: AuthTrigger) => {
@@ -76,15 +83,34 @@ const App: React.FC = () => {
 
     const unsubscribe = auth ? onAuthStateChanged(auth, async (user) => {
         if (user) {
-            await syncLocalToCloud();
-            const data = await loadUserData();
-            if (data.user) {
-                setUserProfile(data.user);
-                setShelf(data.shelf);
-                // If we were on landing/onboarding, go to dashboard
-                if (currentView === AppView.LANDING || currentView === AppView.ONBOARDING) {
-                    setCurrentView(data.user.hasScannedFace ? AppView.DASHBOARD : AppView.FACE_SCANNER);
+            // DETECT LOGIN FLOW: If we are currently on Landing/Onboarding, show loading
+            // This prevents "stuck" UI while we fetch cloud data
+            const isLoginFlow = viewRef.current === AppView.LANDING || viewRef.current === AppView.ONBOARDING;
+            
+            if (isLoginFlow) {
+                 setIsGlobalLoading(true);
+            }
+
+            try {
+                await syncLocalToCloud();
+                const data = await loadUserData();
+                if (data.user) {
+                    setUserProfile(data.user);
+                    setShelf(data.shelf);
+                    
+                    // Force navigation if we were in the login flow
+                    if (isLoginFlow) {
+                        setCurrentView(data.user.hasScannedFace ? AppView.DASHBOARD : AppView.FACE_SCANNER);
+                    }
                 }
+            } catch (e) {
+                console.error("Auth Sync Error", e);
+            } finally {
+                // Small delay to ensure smooth visual transition
+                setTimeout(() => {
+                    setIsGlobalLoading(false);
+                    setShowSaveModal(false); 
+                }, 500);
             }
         }
     }) : () => {};
@@ -175,6 +201,7 @@ const App: React.FC = () => {
 
   // --- RENDER HELPERS ---
   const renderNavBar = () => {
+      if (isGlobalLoading) return null; // Hide nav during loading
       if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH, AppView.BUYING_ASSISTANT, AppView.ROUTINE_BUILDER].includes(currentView)) return null;
 
       const navItemClass = (view: AppView) => 
@@ -190,7 +217,7 @@ const App: React.FC = () => {
       };
 
       return (
-          <div className="fixed bottom-6 left-6 right-6 h-20 bg-white/90 backdrop-blur-xl border border-zinc-200/50 rounded-[2rem] shadow-2xl flex items-center justify-around z-30 max-w-md mx-auto">
+          <div className="fixed bottom-6 left-6 right-6 h-20 bg-white/90 backdrop-blur-xl border border-zinc-200/50 rounded-[2rem] shadow-2xl flex items-center justify-around z-30 max-w-md mx-auto animate-in slide-in-from-bottom-24 duration-700">
               <button onClick={() => handleNavClick(AppView.DASHBOARD)} className={navItemClass(AppView.DASHBOARD)}>
                   <Home size={22} strokeWidth={currentView === AppView.DASHBOARD ? 2.5 : 2} />
               </button>
@@ -341,7 +368,21 @@ const App: React.FC = () => {
             />
         )}
 
-        {showSaveModal && (
+        {/* Global Loading Overlay */}
+        {isGlobalLoading && (
+            <div className="fixed inset-0 z-[100] bg-zinc-900 flex flex-col items-center justify-center animate-in fade-in duration-300">
+                <div className="relative">
+                     <div className="w-20 h-20 bg-teal-500/20 rounded-full animate-ping absolute inset-0"></div>
+                     <div className="w-20 h-20 bg-gradient-to-tr from-teal-500 to-emerald-600 rounded-full relative z-10 flex items-center justify-center shadow-2xl border border-white/10">
+                         <ScanFace size={32} className="text-white animate-pulse" />
+                     </div>
+                </div>
+                <h2 className="text-white font-black text-xl mt-8 tracking-tight">Syncing Profile...</h2>
+                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-2">Please wait</p>
+            </div>
+        )}
+
+        {showSaveModal && !isGlobalLoading && (
             <SaveProfileModal 
                 mode={userProfile?.isAnonymous ? 'SAVE' : 'LOGIN'}
                 trigger={saveModalTrigger}
@@ -350,21 +391,24 @@ const App: React.FC = () => {
                 onMockLogin={() => {
                     // For preview environments where domain auth fails
                     setShowSaveModal(false);
-                    
-                    if (!userProfile) {
-                        // User was trying to login from landing -> Go to Onboarding as if new
-                        setCurrentView(AppView.ONBOARDING); 
-                    } else if (userProfile.isAnonymous) {
-                        // User was trying to save profile -> Mock save success
-                        const updatedUser = { ...userProfile, isAnonymous: false };
-                        persistState(updatedUser, shelf);
-                        setNotification({
+                    // Force a reload of state as if logged in
+                    if (userProfile?.isAnonymous) {
+                         const updatedUser = { ...userProfile, isAnonymous: false };
+                         persistState(updatedUser, shelf);
+                         setNotification({
                             type: 'GENERIC',
                             title: 'Preview Mode',
                             description: 'Auth domain not configured. Profile saved locally.',
                             actionLabel: 'OK',
                             onAction: () => {}
                         });
+                    } else {
+                         // Mock Login from Landing
+                         setIsGlobalLoading(true);
+                         setTimeout(() => {
+                             setIsGlobalLoading(false);
+                             setCurrentView(AppView.ONBOARDING);
+                         }, 1500);
                     }
                 }}
             />
