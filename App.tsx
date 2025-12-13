@@ -20,6 +20,7 @@ import ProductScanner from './components/ProductScanner';
 import ProductSearch from './components/ProductSearch';
 import ProfileSetup from './components/ProfileSetup';
 import AIAssistant from './components/AIAssistant';
+import BuyingAssistant from './components/BuyingAssistant';
 import SaveProfileModal from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 
@@ -32,6 +33,9 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LANDING);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [shelf, setShelf] = useState<Product[]>([]);
+  
+  // Temporary state for the product currently being analyzed in Buying Assistant
+  const [analyzedProduct, setAnalyzedProduct] = useState<Product | null>(null);
   
   // Modals & Overlays
   const [showAIAssistant, setShowAIAssistant] = useState(false);
@@ -112,11 +116,26 @@ const App: React.FC = () => {
       setCurrentView(AppView.DASHBOARD);
   };
 
+  // Called by Scanner/Search when a product is found
   const handleProductFound = (product: Product) => {
-      if (!userProfile) return;
-      const newShelf = [...shelf, product];
+      setAnalyzedProduct(product);
+      setCurrentView(AppView.BUYING_ASSISTANT);
+  };
+
+  // Called by Buying Assistant to confirm adding to shelf
+  const handleAddToShelf = () => {
+      if (!userProfile || !analyzedProduct) return;
+      const newShelf = [...shelf, analyzedProduct];
       persistState(userProfile, newShelf);
+      setAnalyzedProduct(null);
       setCurrentView(AppView.SMART_SHELF);
+  };
+
+  // Called by Buying Assistant to discard result
+  const handleDiscardProduct = () => {
+      setAnalyzedProduct(null);
+      // Return to shelf or dashboard
+      setCurrentView(AppView.SMART_SHELF); 
   };
 
   const handleRemoveProduct = (id: string) => {
@@ -144,7 +163,7 @@ const App: React.FC = () => {
 
   // --- RENDER HELPERS ---
   const renderNavBar = () => {
-      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH].includes(currentView)) return null;
+      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH, AppView.BUYING_ASSISTANT].includes(currentView)) return null;
 
       const navItemClass = (view: AppView) => 
         `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 ${currentView === view ? 'text-teal-600 bg-teal-50 scale-105' : 'text-zinc-400 hover:text-zinc-600'}`;
@@ -250,6 +269,17 @@ const App: React.FC = () => {
                     onCancel={() => setCurrentView(AppView.SMART_SHELF)}
                   />
               ) : null;
+          
+          case AppView.BUYING_ASSISTANT:
+              return (userProfile && analyzedProduct) ? (
+                  <BuyingAssistant 
+                    product={analyzedProduct}
+                    user={userProfile}
+                    shelf={shelf}
+                    onAddToShelf={handleAddToShelf}
+                    onDiscard={handleDiscardProduct}
+                  />
+              ) : null;
 
           case AppView.PROFILE_SETUP:
               return userProfile ? (
@@ -289,9 +319,24 @@ const App: React.FC = () => {
                 onClose={() => setShowSaveModal(false)}
                 onSave={() => {}}
                 onMockLogin={() => {
-                    // For mock login on landing page
+                    // For preview environments where domain auth fails
                     setShowSaveModal(false);
-                    if (!userProfile) setCurrentView(AppView.ONBOARDING); 
+                    
+                    if (!userProfile) {
+                        // User was trying to login from landing -> Go to Onboarding as if new
+                        setCurrentView(AppView.ONBOARDING); 
+                    } else if (userProfile.isAnonymous) {
+                        // User was trying to save profile -> Mock save success
+                        const updatedUser = { ...userProfile, isAnonymous: false };
+                        persistState(updatedUser, shelf);
+                        setNotification({
+                            type: 'GENERIC',
+                            title: 'Preview Mode',
+                            description: 'Auth domain not configured. Profile saved locally.',
+                            actionLabel: 'OK',
+                            onAction: () => {}
+                        });
+                    }
                 }}
             />
         )}

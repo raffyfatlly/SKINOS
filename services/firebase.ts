@@ -92,23 +92,10 @@ export const signInWithGoogle = async () => {
         console.error("Auth object is undefined. App likely failed to initialize.");
         throw new Error("Firebase failed to initialize. Check console for errors.");
     }
-    try {
-        const result = await signInWithPopup(auth, googleProvider);
-        return result.user;
-    } catch (error: any) {
-        console.error("Google Sign In Error:", error);
-        
-        if (error.code === 'auth/operation-not-allowed') {
-            throw new Error("Google Sign-In is not enabled. Go to Firebase Console > Authentication > Sign-in method.");
-        }
-        if (error.code === 'auth/popup-closed-by-user') {
-            throw new Error("Sign-in cancelled.");
-        }
-        if (error.code === 'auth/unauthorized-domain') {
-            throw new Error("Domain not authorized. Add this website domain to Firebase Console > Authentication > Settings.");
-        }
-        throw error;
-    }
+    
+    // Directly return the promise so the caller handles the raw error object (with correct .code)
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
 };
 
 export const registerWithEmail = async (name: string, email: string, pass: string) => {

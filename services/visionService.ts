@@ -1,3 +1,4 @@
+
 import { SkinMetrics } from '../types';
 
 /**
@@ -133,9 +134,8 @@ function calculateAcneScore(img: ImageData): number {
     }
     const avgA = count > 0 ? sumA / count : 128;
     
-    // UPDATED: Stricter Threshold (+10 instead of +12)
-    // This catches more subtle inflammation/congestion
-    const rednessThreshold = avgA + 10; 
+    // UPDATED: Relaxed Threshold (+18) to avoid false positives on healthy blood flow/flush
+    const rednessThreshold = avgA + 18; 
 
     for (let i = 0; i < data.length; i += 4) {
         const { a } = rgbToLab(data[i], data[i+1], data[i+2]);
@@ -144,12 +144,10 @@ function calculateAcneScore(img: ImageData): number {
         }
     }
 
-    // UPDATED: Stricter Penalty Formula
+    // UPDATED: Relaxed Penalty Formula
     const density = acnePixels / totalPixels;
-    // Old: 100 - (density * 800) -> 5% = 60 Score.
-    // New: 100 - (density * 1600) -> 5% = 20 Score (Severe). 3% = 52 Score (Visible).
-    // This ensures even "moderate" breakout coverage results in a lower, more realistic score.
-    return Math.max(10, 100 - (density * 1600));
+    // New: 5% coverage (0.05) -> 100 - 50 = 50 Score (Average/Fair).
+    return Math.max(10, 100 - (density * 1000));
 }
 
 // 2. REDNESS: Global Inflammation (Erythema)
@@ -166,9 +164,10 @@ function calculateRednessScore(img: ImageData): number {
     
     const avgA = count > 0 ? sumA / count : 15;
     
-    // Healthy skin 'a' value is usually around 12-16.
-    if (avgA <= 14) return 98;
-    const penalty = (avgA - 14) * 4.0;
+    // Healthy skin 'a' value is usually around 15-20 in sRGB.
+    // Relaxed baseline from 14 to 18 to account for varying skin undertones.
+    if (avgA <= 18) return 95;
+    const penalty = (avgA - 18) * 3.0;
     return Math.max(20, 100 - penalty);
 }
 
@@ -196,7 +195,7 @@ function calculateTextureScore(img: ImageData): number {
             const laplacian = Math.abs(up + down + left + right - (4 * c));
             
             // Ignore very high laplacian (edges/hair) and very low (flat)
-            if (laplacian > 5 && laplacian < 50) {
+            if (laplacian > 5 && laplacian < 80) { // Increased upper bound slightly
                 varianceSum += laplacian;
             }
             pixels++;
@@ -205,15 +204,12 @@ function calculateTextureScore(img: ImageData): number {
 
     const avgRoughness = pixels > 0 ? varianceSum / pixels : 0;
     
-    // UPDATED: Stricter Texture Scoring
-    // Real "Glass Skin" has very low variance (~1.5-2.0). 
-    // Average skin is ~4-5. Congested skin is >7.
-    // Old formula: 100 - (avg * 7).
-    // New formula: Offsets the base so anything above 2.0 starts dropping fast.
-    // Multiplier increased to 12.
-    // Avg 2.0 -> 100 - 12 = 88.
-    // Avg 5.0 -> 100 - 48 = 52. (Average texture now gets a 50ish score, forcing improvement).
-    const score = 100 - ((avgRoughness - 1.0) * 12);
+    // UPDATED: Shifted baseline for typical camera noise.
+    // Average phone camera skin texture is often ~3-4 due to noise.
+    // Real "Glass Skin" ~1.5. 
+    // Shift baseline from 1.0 to 2.5 to be less punishing.
+    // Avg 4.0 -> 100 - (1.5 * 10) = 85.
+    const score = 100 - ((avgRoughness - 2.5) * 10);
     
     return Math.max(10, Math.min(99, score));
 }
@@ -239,14 +235,16 @@ function calculateWrinkleScore(img: ImageData): number {
 
             const sobelY = (bl + 2*b + br) - (tl + 2*t + tr);
             
-            if (Math.abs(sobelY) > 40) { // Threshold for "Strong Edge"
+            // UPDATED: Increased threshold to 60 to ignore micro-texture/pores
+            if (Math.abs(sobelY) > 60) { 
                 edgePixels++;
             }
         }
     }
 
     const density = edgePixels / (w * h);
-    return Math.max(20, 100 - (density * 400));
+    // Relaxed penalty
+    return Math.max(20, 100 - (density * 300));
 }
 
 // 5. HYDRATION: Specular Reflection Analysis
@@ -262,15 +260,17 @@ function calculateHydrationScore(img: ImageData): number {
         const min = Math.min(r, g, b);
         const sat = max === 0 ? 0 : (max - min) / max;
         
-        if (l > 150 && l < 240 && sat < 0.45 && sat > 0.1) {
+        // Slightly broadened range for highlights
+        if (l > 160 && l < 245 && sat < 0.4 && sat > 0.05) {
             glowPixels++;
         }
     }
     
     const glowDensity = glowPixels / total;
-    const deviation = Math.abs(glowDensity - 0.20); 
+    // Adjusted target to 12% highlights (realistic healthy glow)
+    const deviation = Math.abs(glowDensity - 0.12); 
     
-    return Math.max(20, 100 - (deviation * 300));
+    return Math.max(20, 100 - (deviation * 200));
 }
 
 // 6. DARK CIRCLES: Luma Contrast (Eye vs Cheek)
@@ -285,7 +285,8 @@ function calculateDarkCircleScore(eyeImg: ImageData, cheekImg: ImageData): numbe
     const cheekL = getAvgLuma(cheekImg);
     
     const diff = Math.max(0, cheekL - eyeL);
-    return Math.max(30, 100 - (diff * 2.5));
+    // Relaxed penalty (shadows are natural)
+    return Math.max(30, 100 - (diff * 2.0));
 }
 
 /**
