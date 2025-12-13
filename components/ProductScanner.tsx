@@ -147,16 +147,32 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      <div className="relative flex-1 bg-gray-900 overflow-hidden flex flex-col">
-        {capturedImage ? (
-           <img src={capturedImage} alt="Captured" className="w-full h-full object-contain opacity-50 animate-in fade-in" />
-        ) : useCamera ? (
-           <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-        ) : (
-           <div className="w-full h-full flex items-center justify-center text-zinc-500">
-               <ImageIcon size={64} opacity={0.2} />
-           </div>
+      <div className="relative flex-1 bg-black overflow-hidden flex flex-col items-center justify-center">
+        
+        {/* Dynamic Background for Captured Image */}
+        {capturedImage && (
+            <div className="absolute inset-0 z-0">
+                <img 
+                    src={capturedImage} 
+                    alt="Background" 
+                    className="w-full h-full object-cover blur-2xl scale-110 opacity-60" 
+                />
+            </div>
         )}
+
+        {/* Foreground Content */}
+        <div className="relative z-10 w-full h-full flex items-center justify-center">
+            {capturedImage ? (
+               <img src={capturedImage} alt="Captured" className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-300 drop-shadow-2xl" />
+            ) : useCamera ? (
+               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            ) : (
+               <div className="w-full h-full flex items-center justify-center text-zinc-500 bg-zinc-900">
+                   <ImageIcon size={64} opacity={0.2} />
+               </div>
+            )}
+        </div>
+
         <canvas ref={canvasRef} className="hidden" />
         <input 
             type="file" 
@@ -166,10 +182,11 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
             onChange={handleFileUpload}
         />
         
-        {/* Guides */}
+        {/* Guides (Only on Camera) */}
         {!capturedImage && useCamera && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
                 <div className="w-64 h-64 border-2 border-emerald-400 rounded-xl relative overflow-hidden bg-emerald-400/5 shadow-[0_0_100px_rgba(16,185,129,0.1)]">
+                    {/* Corners */}
                     <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-emerald-400 -mt-0.5 -ml-0.5 rounded-tl-lg"></div>
                     <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-emerald-400 -mt-0.5 -mr-0.5 rounded-tr-lg"></div>
                     <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-emerald-400 -mb-0.5 -ml-0.5 rounded-bl-lg"></div>
@@ -179,21 +196,21 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
             </div>
         )}
         
-        {/* Loading State */}
+        {/* Loading State Overlay */}
         {isProcessing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-20 animate-in fade-in">
-            <div className="text-center p-6">
-               <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-               <h3 className="text-2xl font-bold text-white mb-2">{loadingText}</h3>
-               <p className="text-emerald-400 text-sm font-medium tracking-wide">Using AI Knowledge Base...</p>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-30 animate-in fade-in duration-500">
+            <div className="text-center p-6 relative">
+               <div className="w-20 h-20 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto mb-6 shadow-lg shadow-emerald-500/20"></div>
+               <h3 className="text-2xl font-black text-white mb-2 tracking-tight drop-shadow-md">{loadingText}</h3>
+               <p className="text-emerald-300 text-xs font-bold uppercase tracking-widest animate-pulse">Using AI Vision</p>
             </div>
           </div>
         )}
       </div>
 
-      <div className="bg-zinc-900/90 backdrop-blur-xl p-8 pb-10 border-t border-white/10 flex flex-col items-center gap-6">
+      <div className="bg-zinc-900/90 backdrop-blur-xl p-8 pb-10 border-t border-white/10 flex flex-col items-center gap-6 relative z-40">
         {error && (
-            <div className="text-rose-300 text-sm flex items-center gap-2 bg-rose-500/10 px-4 py-3 rounded-xl border border-rose-500/20 w-full justify-center">
+            <div className="text-rose-300 text-sm flex items-center gap-2 bg-rose-500/10 px-4 py-3 rounded-xl border border-rose-500/20 w-full justify-center animate-in slide-in-from-bottom-2">
                 <AlertOctagon size={16} /> {error}
             </div>
         )}
@@ -210,9 +227,9 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
             <button 
                 onClick={captureFromCamera}
                 disabled={isProcessing || !useCamera}
-                className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative group active:scale-95 transition disabled:opacity-50 disabled:scale-100"
+                className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative group active:scale-95 transition disabled:opacity-50 disabled:scale-100 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
             >
-                <div className="w-16 h-16 bg-white rounded-full shadow-[0_0_20px_white]"></div>
+                <div className="w-16 h-16 bg-white rounded-full"></div>
             </button>
 
             <button 
@@ -223,7 +240,7 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
                 <ImageIcon size={24} />
             </button>
         </div>
-        <p className="text-zinc-500 text-xs font-medium tracking-wide">Scan label or upload photo</p>
+        <p className="text-zinc-500 text-xs font-medium tracking-wide uppercase">Scan label or upload photo</p>
       </div>
     </div>
   );
