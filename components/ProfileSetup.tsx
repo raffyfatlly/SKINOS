@@ -178,6 +178,8 @@ const GoalEditModal: React.FC<{
 const HistoryChart: React.FC<{ history: SkinMetrics[] }> = ({ history }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [tooltip, setTooltip] = useState<{ x: number, y: number, score: number, date: string } | null>(null);
+    const pointsRef = useRef<{ x: number, y: number, metric: SkinMetrics }[]>([]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -216,7 +218,8 @@ const HistoryChart: React.FC<{ history: SkinMetrics[] }> = ({ history }) => {
         // Clear
         ctx.clearRect(0, 0, width, height);
 
-        const points = data.map((d, i) => ({ x: getX(i), y: getY(d.overallScore) }));
+        const points = data.map((d, i) => ({ x: getX(i), y: getY(d.overallScore), metric: d }));
+        pointsRef.current = points; // Store for hit testing
 
         // Gradient Fill (Curve)
         const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
@@ -290,9 +293,66 @@ const HistoryChart: React.FC<{ history: SkinMetrics[] }> = ({ history }) => {
 
     }, [history]);
 
+    const handleInteraction = (clientX: number) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = clientX - rect.left;
+        
+        let nearest = null;
+        let minDist = Infinity;
+        
+        pointsRef.current.forEach(p => {
+            const dist = Math.abs(p.x - x);
+            if (dist < minDist && dist < 40) { // 40px hit radius
+                minDist = dist;
+                nearest = p;
+            }
+        });
+    
+        if (nearest) {
+            setTooltip({
+                x: nearest.x,
+                y: nearest.y,
+                score: nearest.metric.overallScore,
+                date: new Date(nearest.metric.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            });
+        } else {
+            setTooltip(null);
+        }
+    };
+    
     return (
-        <div ref={containerRef} className="w-full h-40 relative">
+        <div 
+            ref={containerRef} 
+            className="w-full h-40 relative group cursor-crosshair touch-none"
+            onMouseMove={(e) => handleInteraction(e.clientX)}
+            onTouchMove={(e) => handleInteraction(e.touches[0].clientX)}
+            onMouseLeave={() => setTooltip(null)}
+            onTouchEnd={() => setTooltip(null)}
+        >
             <canvas ref={canvasRef} />
+            
+            {tooltip && (
+                <div 
+                    className="absolute z-20 pointer-events-none transform -translate-x-1/2 -translate-y-full mb-3 animate-in fade-in zoom-in-95 duration-200"
+                    style={{ left: tooltip.x, top: tooltip.y }}
+                >
+                    <div className="bg-zinc-800 text-white rounded-lg shadow-xl shadow-zinc-900/20 py-2 px-3 flex flex-col items-center">
+                        <span className="text-sm font-black leading-none mb-0.5">{tooltip.score}</span>
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide leading-none">{tooltip.date}</span>
+                        {/* Triangle */}
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-zinc-800 rotate-45"></div>
+                    </div>
+                </div>
+            )}
+
+            {/* Active Point Indicator */}
+            {tooltip && (
+                <div 
+                    className="absolute w-3 h-3 rounded-full border-2 border-white bg-teal-500 shadow-md pointer-events-none transform -translate-x-1/2 -translate-y-1/2"
+                    style={{ left: tooltip.x, top: tooltip.y }}
+                />
+            )}
         </div>
     );
 };

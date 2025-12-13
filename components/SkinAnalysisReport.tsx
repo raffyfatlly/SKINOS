@@ -1,10 +1,9 @@
 
-// ... (keep imports)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SkinMetrics, Product, UserProfile } from '../types';
 import { auditProduct, getClinicalTreatmentSuggestions } from '../services/geminiService';
 import { startCheckout } from '../services/stripeService';
-import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck, ChevronDown, Lock, Crown, ListChecks } from 'lucide-react';
+import { RefreshCw, Sparkles, Sun, Moon, Ban, CheckCircle2, AlertTriangle, Target, BrainCircuit, Stethoscope, Plus, Microscope, X, FlaskConical, Search, ArrowRight, Pipette, Droplet, Layers, Fingerprint, Info, AlertOctagon, GitBranch, ArrowUpRight, Syringe, Zap, Activity, MessageCircle, ShieldAlert, TrendingUp, TrendingDown, Minus, ShoppingBag, ScanBarcode, ShieldCheck, ChevronDown, Lock, Crown, ListChecks, HelpCircle } from 'lucide-react';
 
 // --- SUB COMPONENTS ---
 
@@ -19,6 +18,43 @@ const renderVerdict = (text: string) => {
     }
     return <span key={i}>{part}</span>;
   });
+};
+
+// New Tooltip Component for Hero Section
+const HeroTooltip: React.FC<{ 
+    children: React.ReactNode; 
+    title: string; 
+    content: string;
+}> = ({ children, title, content }) => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    return (
+        <div className="relative">
+            <button 
+                onClick={(e) => { e.stopPropagation(); setIsVisible(!isVisible); }}
+                className="text-left group outline-none w-full"
+            >
+                {children}
+            </button>
+            
+            {isVisible && (
+                <>
+                    <div className="fixed inset-0 z-30 cursor-default" onClick={(e) => { e.stopPropagation(); setIsVisible(false); }} />
+                    <div className="absolute bottom-full left-0 mb-3 w-56 bg-zinc-900/95 backdrop-blur-xl border border-white/20 p-4 rounded-2xl shadow-2xl z-40 animate-in fade-in zoom-in-95 origin-bottom-left">
+                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
+                            <Info size={12} className="text-teal-400" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-teal-400">{title}</span>
+                        </div>
+                        <p className="text-[11px] font-medium text-white/90 leading-relaxed">
+                            {content}
+                        </p>
+                        {/* Triangle Pointer */}
+                        <div className="absolute -bottom-1.5 left-6 w-3 h-3 bg-zinc-900 rotate-45 border-b border-r border-white/20"></div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
 };
 
 interface MetricRingProps {
@@ -572,22 +608,30 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
                     {userProfile.isAnonymous ? "Save to Rescan" : "Rescan"}
                  </button>
 
-                 <div className="absolute bottom-0 left-0 right-0 p-8 text-white z-10">
-                     <div className="flex gap-6 border-t border-white/10 pt-4 tech-reveal delay-100">
-                        <div>
-                             <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Score</span>
-                             <span className="text-xl font-black text-white">{metrics.overallScore}</span>
-                        </div>
-                        <div>
-                             <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Priority</span>
-                             <span className="text-xl font-black text-white">{groupAnalysis.priorityCategory}</span>
-                        </div>
-                        <div>
-                             <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Skin State</span>
-                             <span className="text-xl font-black text-white flex items-center gap-1.5">
-                                {calculatedSkinType.split('+')[0].trim()}
-                             </span>
-                        </div>
+                 <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8 text-white z-10">
+                     <div className="flex justify-between items-start border-t border-white/10 pt-4 tech-reveal delay-100">
+                        <HeroTooltip title="Overall Score" content="A holistic health rating (0-100) combining analysis of acne, wrinkles, texture, redness, and hydration.">
+                            <div>
+                                 <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Score</span>
+                                 <span className="text-xl font-black text-white">{metrics.overallScore}</span>
+                            </div>
+                        </HeroTooltip>
+                        
+                        <HeroTooltip title="Priority Focus" content="The primary category (Blemishes, Health, or Vitality) that currently requires the most attention in your routine.">
+                            <div>
+                                 <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Priority</span>
+                                 <span className="text-xl font-black text-white">{groupAnalysis.priorityCategory}</span>
+                            </div>
+                        </HeroTooltip>
+
+                        <HeroTooltip title="Skin State" content="Your dynamic skin type calculated from real-time oil, hydration, and sensitivity levels. This can change with weather and routine.">
+                            <div className="text-right sm:text-left">
+                                 <span className="text-[9px] font-bold text-teal-400 uppercase tracking-widest block mb-0.5">Skin State</span>
+                                 <span className="text-xl font-black text-white flex items-center justify-end sm:justify-start gap-1.5">
+                                    {calculatedSkinType.split('+')[0].trim()}
+                                 </span>
+                            </div>
+                        </HeroTooltip>
                      </div>
                  </div>
             </div>
