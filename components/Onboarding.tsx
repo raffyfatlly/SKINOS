@@ -6,11 +6,12 @@ import { Sparkles, Calendar, ArrowRight, LogIn, ArrowLeft, ScanFace } from 'luci
 interface OnboardingProps {
   onComplete: (data: { name: string; age: number; skinType: SkinType }) => void;
   onSignIn: () => void;
+  initialName?: string;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn }) => {
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
+const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onSignIn, initialName = '' }) => {
+  const [step, setStep] = useState(initialName ? 1 : 0);
+  const [name, setName] = useState(initialName);
   const [age, setAge] = useState('');
 
   const handleNext = () => {

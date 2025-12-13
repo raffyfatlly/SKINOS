@@ -43,6 +43,9 @@ const App: React.FC = () => {
   // Temporary state for the product currently being analyzed in Buying Assistant
   const [analyzedProduct, setAnalyzedProduct] = useState<Product | null>(null);
   
+  // State for pre-filling onboarding data from Google Auth
+  const [prefillName, setPrefillName] = useState<string>('');
+  
   // Modals & Overlays
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   
@@ -126,13 +129,24 @@ const App: React.FC = () => {
             try {
                 await syncLocalToCloud();
                 const data = await loadUserData();
+                
                 if (data.user) {
+                    // Scenario A: Existing User (Found in Cloud or Local)
                     setUserProfile(data.user);
                     setShelf(data.shelf);
                     
                     // Force navigation if we were in the login flow
                     if (isLoginFlow) {
                         setCurrentView(data.user.hasScannedFace ? AppView.DASHBOARD : AppView.FACE_SCANNER);
+                    }
+                } else {
+                    // Scenario B: New User via Google (No profile found)
+                    // We need to create a profile. Direct them to Onboarding.
+                    if (isLoginFlow) {
+                        if (user.displayName) {
+                            setPrefillName(user.displayName);
+                        }
+                        setCurrentView(AppView.ONBOARDING);
                     }
                 }
             } catch (e) {
@@ -153,16 +167,29 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
   const handleOnboardingComplete = (data: { name: string; age: number; skinType: SkinType }) => {
+      // Check if user is currently authenticated (e.g. via Google Login flow)
+      const isAuth = !!auth?.currentUser;
+
       const newUser: UserProfile = {
           name: data.name,
           age: data.age,
           skinType: data.skinType,
           hasScannedFace: false,
           biometrics: {} as any, 
-          isAnonymous: true,
+          isAnonymous: !isAuth, // If logged in, they are NOT anonymous
           isPremium: false // Default to false
       };
+      
       setUserProfile(newUser);
+      
+      // If authenticated, save to cloud immediately to link profile to account
+      if (isAuth) {
+          saveUserData(newUser, shelf);
+      } else {
+          // If anonymous, save locally
+          persistState(newUser, shelf);
+      }
+
       setCurrentView(AppView.FACE_SCANNER);
   };
 
@@ -284,7 +311,7 @@ const App: React.FC = () => {
               return <LandingPage onGetStarted={() => setCurrentView(AppView.ONBOARDING)} onLogin={() => openAuth('GENERIC')} />;
 
           case AppView.ONBOARDING:
-              return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => openAuth('GENERIC')} />;
+              return <Onboarding onComplete={handleOnboardingComplete} onSignIn={() => openAuth('GENERIC')} initialName={prefillName} />;
           
           case AppView.FACE_SCANNER:
               return (
