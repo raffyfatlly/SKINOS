@@ -16,7 +16,7 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [loadingText, setLoadingText] = useState("Analyzing Product...");
+  const [loadingText, setLoadingText] = useState("Identifying Product...");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [useCamera, setUseCamera] = useState(true);
@@ -26,18 +26,18 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
     let interval: ReturnType<typeof setInterval>;
     if (isProcessing) {
         const messages = [
-            "Analyzing Label...",
-            "Reading Ingredients...",
-            "Checking Formulation...",
-            "Matching Biometrics...",
-            "Calculating Score..."
+            "Identifying Brand & Name...",
+            "Scanning for ingredients...",
+            "Checking global skincare database...",
+            "Matching with your unique skin profile...",
+            "Calculating compatibility score..."
         ];
         let i = 0;
         setLoadingText(messages[0]);
         interval = setInterval(() => {
             i = (i + 1) % messages.length;
             setLoadingText(messages[i]);
-        }, 3000); // Change every 3 seconds
+        }, 2000); 
     }
     return () => clearInterval(interval);
   }, [isProcessing]);
@@ -109,7 +109,7 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
         onProductFound(product);
       } catch (err) {
         console.error(err);
-        setError("Analysis Failed. Please ensure the ingredient list is clear and try again.");
+        setError("Analysis Failed. Ensure image is clear or try typing the name.");
         setIsProcessing(false);
         setCapturedImage(null);
         // Restart camera if needed
@@ -201,7 +201,7 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-30 animate-in fade-in duration-500">
             <div className="text-center p-6 relative">
                <div className="w-20 h-20 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto mb-6 shadow-lg shadow-emerald-500/20"></div>
-               <h3 className="text-2xl font-black text-white mb-2 tracking-tight drop-shadow-md">{loadingText}</h3>
+               <h3 className="text-xl font-bold text-white mb-2 tracking-tight drop-shadow-md">{loadingText}</h3>
                <p className="text-emerald-300 text-xs font-bold uppercase tracking-widest animate-pulse">Using AI Vision</p>
             </div>
           </div>
@@ -240,7 +240,7 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
                 <ImageIcon size={24} />
             </button>
         </div>
-        <p className="text-zinc-500 text-xs font-medium tracking-wide uppercase">Scan label or upload photo</p>
+        <p className="text-zinc-500 text-xs font-medium tracking-wide uppercase">Scan front label or ingredients</p>
       </div>
     </div>
   );

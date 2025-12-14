@@ -134,39 +134,6 @@ export const analyzeFaceSkin = async (image: string, localMetrics: SkinMetrics, 
     }, localMetrics);
 };
 
-export const analyzeProductImage = async (base64: string, userMetrics: SkinMetrics): Promise<Product> => {
-    return runWithRetry<Product>(async (ai) => {
-        const prompt = `Analyze this product label. Extract name, brand, ingredients. 
-        Evaluate suitability for user with: ${JSON.stringify(userMetrics)}.
-        Return JSON: name, brand, type, ingredients (array), estimatedPrice (number), suitabilityScore (0-100), risks (array of {ingredient, riskLevel, reason}), benefits (array of {ingredient, target, description, relevance}).`;
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: {
-                parts: [
-                    { inlineData: { mimeType: 'image/jpeg', data: base64.split(',')[1] } },
-                    { text: prompt }
-                ]
-            },
-             config: { responseMimeType: 'application/json' }
-        });
-
-        const data = parseJSONFromText(response.text || "{}");
-        return {
-            id: Date.now().toString(),
-            name: data.name || "Unknown Product",
-            brand: data.brand || "Unknown Brand",
-            type: data.type || "UNKNOWN",
-            ingredients: data.ingredients || [],
-            estimatedPrice: data.estimatedPrice || 0,
-            suitabilityScore: data.suitabilityScore || 50,
-            risks: data.risks || [],
-            benefits: data.benefits || [],
-            dateScanned: Date.now()
-        };
-    }, getFallbackProduct(userMetrics, "Scanned Product"));
-};
-
 export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics, consistencyScore?: number, knownBrand?: string): Promise<Product> => {
     return runWithRetry<Product>(async (ai) => {
         const prompt = `
@@ -235,6 +202,84 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
             dateScanned: Date.now()
         };
     }, { ...getFallbackProduct(userMetrics, productName), suitabilityScore: consistencyScore || 75, brand: knownBrand || "Unknown Brand" }, 45000); 
+};
+
+export const analyzeProductImage = async (base64: string, userMetrics: SkinMetrics): Promise<Product> => {
+    return runWithRetry<Product>(async (ai) => {
+        // STEP 1: Vision - Identify what we are looking at
+        const visionPrompt = `
+        Analyze this skincare product image.
+        
+        TASK:
+        1. Extract the EXACT Brand Name and Product Name.
+        2. Check if a full ingredient list (INCI) is visible and readable in this specific image.
+        
+        OUTPUT JSON:
+        { 
+            "brand": "string", 
+            "name": "string", 
+            "hasVisibleIngredients": boolean,
+            "detectedIngredients": ["string"] 
+        }
+        `;
+
+        const visionResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: 'image/jpeg', data: base64.split(',')[1] } },
+                    { text: visionPrompt }
+                ]
+            },
+            config: { responseMimeType: 'application/json' }
+        });
+
+        const visionData = parseJSONFromText(visionResponse.text || "{}");
+
+        // STEP 2: Decision Tree
+        // If we DON'T see ingredients (e.g. Front Label), use the Search Engine (Knowledge Base) to fetch them.
+        if (!visionData.hasVisibleIngredients || !visionData.detectedIngredients || visionData.detectedIngredients.length < 5) {
+            console.log("Front label detected. Switching to Global Database Lookup for:", visionData.name);
+            
+            if (!visionData.name || visionData.name === "Unknown") {
+                 throw new Error("Could not identify product name from image.");
+            }
+            
+            // Delegate to the search engine logic which retrieves ingredients from internal knowledge
+            return await analyzeProductFromSearch(visionData.name, userMetrics, undefined, visionData.brand);
+        }
+
+        // STEP 3: If we DO see ingredients, score them directly here
+        const analysisPrompt = `
+        Analyze this detected product.
+        Brand: ${visionData.brand}
+        Name: ${visionData.name}
+        Detected Ingredients (from OCR): ${JSON.stringify(visionData.detectedIngredients)}
+        
+        Evaluate suitability for user with metrics: ${JSON.stringify(userMetrics)}.
+        
+        Return JSON: name, brand, type, ingredients (use detected list), estimatedPrice (number), suitabilityScore (0-100), risks (array of {ingredient, riskLevel, reason}), benefits (array of {ingredient, target, description, relevance}).`;
+
+        const finalResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: analysisPrompt,
+            config: { responseMimeType: 'application/json' }
+        });
+
+        const data = parseJSONFromText(finalResponse.text || "{}");
+        return {
+            id: Date.now().toString(),
+            name: data.name || visionData.name || "Unknown Product",
+            brand: data.brand || visionData.brand || "Unknown Brand",
+            type: data.type || "UNKNOWN",
+            ingredients: data.ingredients || [],
+            estimatedPrice: data.estimatedPrice || 0,
+            suitabilityScore: data.suitabilityScore || 50,
+            risks: data.risks || [],
+            benefits: data.benefits || [],
+            dateScanned: Date.now()
+        };
+    }, getFallbackProduct(userMetrics, "Scanned Product"), 60000); // Increased timeout to 60s for 2-step process
 };
 
 export const auditProduct = (product: Product, user: UserProfile) => {

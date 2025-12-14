@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, X, Loader, AlertCircle } from 'lucide-react';
 import { Product, UserProfile } from '../types';
 import { analyzeProductFromSearch, searchProducts } from '../services/geminiService';
@@ -22,6 +22,27 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
     const [isSearching, setIsSearching] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [loadingText, setLoadingText] = useState("Analyzing Product...");
+
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (isAnalyzing) {
+            const messages = [
+                "Searching global skincare database...",
+                "Extracting full ingredient list...",
+                "Matching with your unique skin profile...",
+                "Checking for potential irritants...",
+                "Calculating final compatibility score..."
+            ];
+            let i = 0;
+            setLoadingText(messages[0]);
+            interval = setInterval(() => {
+                i = (i + 1) % messages.length;
+                setLoadingText(messages[i]);
+            }, 2500);
+        }
+        return () => clearInterval(interval);
+    }, [isAnalyzing]);
 
     const handleSearch = async () => {
         if (!query.trim()) return;
@@ -42,9 +63,8 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
         } catch (e) {
             console.error(e);
             // Fallback if search fails
-            setResults([
-                { name: query, brand: "Generic", score: 0 },
-            ]);
+            setResults([]);
+            setError("Unable to connect to product database.");
         } finally {
             setIsSearching(false);
         }
@@ -88,7 +108,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                 {isSearching || isAnalyzing ? (
                     <div className="flex flex-col items-center justify-center h-64 text-zinc-400 gap-4">
                         <Loader className="animate-spin" size={32} />
-                        <p className="text-xs font-bold uppercase tracking-widest">{isAnalyzing ? "Analyzing Ingredients..." : "Searching Database..."}</p>
+                        <p className="text-xs font-bold uppercase tracking-widest">{isAnalyzing ? loadingText : "Searching Database..."}</p>
                     </div>
                 ) : error ? (
                     <div className="flex flex-col items-center justify-center h-64 text-rose-500 gap-4 text-center">
@@ -107,14 +127,13 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                                 <div className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{res.brand}</div>
                             </button>
                         ))}
+                        
                         {results.length === 0 && query && !isSearching && (
-                             <button 
-                                onClick={() => handleSelectProduct({ name: query, brand: "Generic", score: 0 })}
-                                className="w-full p-4 text-left border border-dashed border-zinc-300 rounded-2xl hover:bg-zinc-50 text-zinc-500 font-medium text-sm"
-                            >
-                                Analyze "{query}"
-                            </button>
+                             <div className="text-center text-zinc-400 mt-10">
+                                <p className="text-sm font-medium">No matching products found.</p>
+                             </div>
                         )}
+
                         {results.length === 0 && !query && (
                             <div className="text-center text-zinc-400 mt-20">
                                 <Search size={48} className="mx-auto mb-4 opacity-20" />
