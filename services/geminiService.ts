@@ -64,22 +64,29 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
         const prompt = `
         User Query: "${query}"
         
+        ACT AS A PRECISE SKINCARE PRODUCT SEARCH ENGINE.
+        
         TASK:
-        1. Search global skincare databases for products matching the query.
-        2. **Quantity**: Return a list of 5 to 10 relevant products. Do NOT return just one unless it's a unique ID.
-        3. **Robust Matching**: 
-           - If the user types a brand (e.g., "CeraVe"), list their top 5-10 best-sellers.
-           - If the user types a category (e.g., "Vitamin C Serum"), list 5-10 top-rated options from various reputable brands.
-           - If the user types a specific product name (e.g., "Effaclar"), list the exact product AND its related variations (e.g., Gel, Duo+, Serum).
-        4. Correct any typos (e.g., "Cerave cleansr" -> "CeraVe Hydrating Cleanser").
+        1. **Brand Detection**: Analyze if the query contains a specific brand name (e.g., "Neutrogena", "CeraVe", "Ordinary", "La Roche").
+        
+        2. **STRICT FILTERING RULES**:
+           - **IF A BRAND IS IDENTIFIED**: 
+             - You must ONLY return products from that EXACT brand. 
+             - Do **NOT** include products from competitors.
+             - Return a list of 5-10 items covering the specific product intended AND its variations/lines (e.g., if user types "neutrogena acne cleanser", return "Neutrogena Deep Clean Acne Foaming Cleanser", "Neutrogena Oil-Free Acne Wash", "Neutrogena Stubborn Texture Daily Cleanser", etc.).
+             - Include full names with specific versions (e.g. "Deep Clean", "Hydro Boost", "2021 formulation" if relevant).
+           
+           - **IF NO BRAND IS IDENTIFIED**:
+             - Return 5-10 top-rated products from various reputable global brands that match the description.
+        
+        3. **Robustness**: Fix typos (e.g., "nutrogena" -> "Neutrogena").
         
         OUTPUT FORMAT:
-        Strict JSON Array of objects with 'brand' and 'name' keys.
-        Example: 
+        Strict JSON Array of objects.
         [
-          {"brand": "Brand A", "name": "Product Name 1"},
-          {"brand": "Brand A", "name": "Product Name 2"},
-          {"brand": "Brand B", "name": "Product Name 3"}
+          {"brand": "Neutrogena", "name": "Neutrogena Deep Clean Acne Foaming Cleanser"},
+          {"brand": "Neutrogena", "name": "Neutrogena Oil-Free Acne Wash"},
+          ...
         ]
         `;
         
