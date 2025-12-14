@@ -27,9 +27,10 @@ interface RoutineData {
 interface PremiumRoutineBuilderProps {
     user: UserProfile;
     onBack: () => void;
+    onUnlockPremium: () => void;
 }
 
-const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onBack }) => {
+const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onBack, onUnlockPremium }) => {
     const [activeTab, setActiveTab] = useState<'AM' | 'PM'>('AM');
     const [routine, setRoutine] = useState<RoutineData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -103,7 +104,7 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
                 <h2 className="text-3xl font-black mb-4">Unlock Premium Routine</h2>
                 <p className="text-zinc-400 max-w-sm mx-auto mb-8">Get personalized 3-tier product recommendations (Budget, Value, Luxury) for every step of your routine.</p>
                 <button 
-                    onClick={startCheckout}
+                    onClick={onUnlockPremium}
                     className="bg-gradient-to-r from-teal-400 to-emerald-500 text-white px-8 py-4 rounded-full font-bold text-lg shadow-lg hover:scale-105 transition-transform active:scale-95 flex items-center gap-2"
                 >
                     <Sparkles size={18} className="text-yellow-300" /> Unlock Now

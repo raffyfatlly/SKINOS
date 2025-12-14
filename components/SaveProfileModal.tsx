@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { X, ShieldCheck, Cloud, UserCheck, Mail, Lock, ArrowRight, AlertTriangle, Loader, Check, Fingerprint, History, Sparkles, ScanBarcode, LineChart } from 'lucide-react';
+import { X, ShieldCheck, Cloud, UserCheck, Mail, Lock, ArrowRight, AlertTriangle, Loader, Check, Fingerprint, History, Sparkles, ScanBarcode, LineChart, Crown } from 'lucide-react';
 import { signInWithGoogle, registerWithEmail, loginWithEmail } from '../services/firebase';
 
-export type AuthTrigger = 'SCAN_PRODUCT' | 'RESCAN_FACE' | 'VIEW_PROGRESS' | 'GENERIC' | 'SAVE_RESULTS';
+export type AuthTrigger = 'SCAN_PRODUCT' | 'RESCAN_FACE' | 'VIEW_PROGRESS' | 'GENERIC' | 'SAVE_RESULTS' | 'UNLOCK_DEAL';
 
 interface SaveProfileModalProps {
   onSave: () => void;
@@ -143,6 +143,12 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                   title: "Save Your Results",
                   desc: "Don't lose this analysis. Create an account to access it later.",
                   icon: ShieldCheck
+              };
+          case 'UNLOCK_DEAL':
+              return {
+                  title: "Claim Exclusive Offer",
+                  desc: "Create a free account to unlock premium features and secure your lifetime access.",
+                  icon: Crown
               };
           default:
               return {

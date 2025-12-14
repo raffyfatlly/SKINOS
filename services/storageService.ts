@@ -93,3 +93,47 @@ export const clearLocalData = () => {
     localStorage.removeItem(SHELF_KEY);
     localStorage.removeItem('skinos_guide_seen_v2');
 };
+
+// --- ACCESS CODE REDEMPTION ---
+export const claimAccessCode = async (code: string): Promise<{ success: boolean; error?: string }> => {
+    // Check if DB is initialized
+    if (!db) {
+        return { success: false, error: "System offline. Please check connection." };
+    }
+    
+    // Check authentication
+    if (!auth?.currentUser) {
+        return { success: false, error: "Please log in or create an account to redeem this code." };
+    }
+
+    const uid = auth.currentUser.uid;
+    const codeId = code.trim().toUpperCase();
+    
+    // Use the code as the document ID to ensure uniqueness via Firestore constraints
+    const codeRef = doc(db, "claimed_codes", codeId);
+
+    try {
+        const codeSnap = await getDoc(codeRef);
+        
+        if (codeSnap.exists()) {
+            const data = codeSnap.data();
+            // If the current user already claimed it, we can allow (idempotency), otherwise block
+            if (data.claimedBy === uid) {
+                return { success: true };
+            }
+            return { success: false, error: "This code has already been claimed by another user." };
+        }
+
+        // Claim the code
+        await setDoc(codeRef, {
+            claimedBy: uid,
+            claimedAt: Date.now(),
+            code: codeId
+        });
+
+        return { success: true };
+    } catch (e) {
+        console.error("Code Claim Error", e);
+        return { success: false, error: "Unable to verify code. Please try again." };
+    }
+};

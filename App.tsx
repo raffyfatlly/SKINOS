@@ -10,6 +10,7 @@ import {
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
 import { auth } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { startCheckout } from './services/stripeService';
 
 // Components
 import LandingPage from './components/LandingPage';
@@ -25,6 +26,7 @@ import BuyingAssistant from './components/BuyingAssistant';
 import PremiumRoutineBuilder from './components/PremiumRoutineBuilder';
 import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
+import BetaOfferModal from './components/BetaOfferModal';
 
 // Icons
 import { ScanFace, LayoutGrid, User, Search, Home, Loader } from 'lucide-react';
@@ -53,6 +55,9 @@ const App: React.FC = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveModalTrigger, setSaveModalTrigger] = useState<AuthTrigger>('GENERIC');
 
+  // Premium Offer Modal State
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
   const [notification, setNotification] = useState<{ type: NotificationType, title: string, description: string, actionLabel: string, onAction: () => void } | null>(null);
   const [aiQuery, setAiQuery] = useState<string | null>(null);
 
@@ -63,6 +68,16 @@ const App: React.FC = () => {
   const openAuth = (trigger: AuthTrigger) => {
       setSaveModalTrigger(trigger);
       setShowSaveModal(true);
+  };
+
+  // --- HELPER: OPEN PREMIUM MODAL ---
+  const handleUnlockPremium = () => {
+      // Prompt anonymous users to sign up first
+      if (userProfile?.isAnonymous) {
+          openAuth('UNLOCK_DEAL');
+          return;
+      }
+      setShowPremiumModal(true);
   };
 
   // --- PERSISTENCE HELPER ---
@@ -152,7 +167,7 @@ const App: React.FC = () => {
             } catch (e) {
                 console.error("Auth Sync Error", e);
             } finally {
-                // Small delay to ensure smooth visual transition
+                // Small delay for smooth visual transition
                 setTimeout(() => {
                     setIsGlobalLoading(false);
                     setShowSaveModal(false); 
@@ -253,6 +268,22 @@ const App: React.FC = () => {
       setCurrentView(AppView.LANDING);
   }
 
+  // --- NEW: HANDLE CODE UNLOCK ---
+  const handleCodeUnlock = () => {
+      if (!userProfile) return;
+      const updatedUser = { ...userProfile, isPremium: true };
+      persistState(updatedUser, shelf);
+      setShowPremiumModal(false);
+      
+      setNotification({
+          type: 'GENERIC',
+          title: 'Premium Unlocked!',
+          description: 'Access code redeemed successfully.',
+          actionLabel: 'Awesome',
+          onAction: () => {}
+      });
+  };
+
   // --- RENDER HELPERS ---
   const renderNavBar = () => {
       if (isGlobalLoading) return null; // Hide nav during loading
@@ -332,6 +363,7 @@ const App: React.FC = () => {
                     onViewProgress={() => setCurrentView(AppView.PROFILE_SETUP)}
                     onOpenRoutineBuilder={() => setCurrentView(AppView.ROUTINE_BUILDER)}
                     onLoginRequired={(reason) => openAuth(reason as AuthTrigger)}
+                    onUnlockPremium={handleUnlockPremium}
                   />
               ) : null;
 
@@ -378,6 +410,7 @@ const App: React.FC = () => {
                     shelf={shelf}
                     onAddToShelf={handleAddToShelf}
                     onDiscard={handleDiscardProduct}
+                    onUnlockPremium={handleUnlockPremium}
                   />
               ) : null;
 
@@ -386,6 +419,7 @@ const App: React.FC = () => {
                   <PremiumRoutineBuilder 
                       user={userProfile}
                       onBack={() => setCurrentView(AppView.DASHBOARD)}
+                      onUnlockPremium={handleUnlockPremium}
                   />
               ) : null;
 
@@ -465,6 +499,18 @@ const App: React.FC = () => {
                          }, 1500);
                     }
                 }}
+            />
+        )}
+
+        {/* PREMIUM BETA OFFER MODAL */}
+        {showPremiumModal && (
+            <BetaOfferModal 
+                onClose={() => setShowPremiumModal(false)}
+                onConfirm={() => {
+                    setShowPremiumModal(false);
+                    startCheckout();
+                }}
+                onCodeSuccess={handleCodeUnlock}
             />
         )}
 
