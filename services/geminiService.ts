@@ -62,14 +62,14 @@ const getFallbackProduct = (userMetrics: SkinMetrics, name: string): Product => 
 export const searchProducts = async (query: string): Promise<{ name: string, brand: string }[]> => {
     return runWithRetry<{ name: string, brand: string }[]>(async (ai) => {
         const prompt = `
-        You are a smart product search engine for skincare and cosmetics.
+        Act as a search bridge for the 'INCI Decoder' skincare database (incidecoder.com).
         User Query: "${query}"
         
         TASK:
-        1. Identify the likely BRAND and PRODUCT NAME from the query.
-        2. If the brand is merged with the name (e.g., "glad2glow", "larocheposay"), separate them correctly (e.g., "Glad2Glow", "La Roche-Posay").
-        3. If the query implies a specific product, return that single result.
-        4. If the query is vague (e.g., "vitamin c serum"), suggest 3 popular, high-quality real-world products matching the description.
+        1. Interpret the query to find skincare/cosmetic products that strictly exist on incidecoder.com.
+        2. Return the exact BRAND and PRODUCT NAME as they appear on the INCI Decoder site.
+        3. If the user types a category (e.g. "moisturizer"), suggest 3 popular top-rated products from INCI Decoder.
+        4. Correct any typos to match the official database entries.
         
         OUTPUT:
         Strict JSON Array of objects.

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Search, X, Loader, AlertCircle } from 'lucide-react';
 import { Product, UserProfile } from '../types';
@@ -73,7 +74,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                 <div className="flex-1 relative">
                     <input 
                         className="w-full bg-zinc-100 rounded-full pl-10 pr-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                        placeholder="Search product name..."
+                        placeholder="Search INCI Decoder..."
                         value={query}
                         onChange={e => setQuery(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSearch()}
@@ -87,7 +88,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                 {isSearching || isAnalyzing ? (
                     <div className="flex flex-col items-center justify-center h-64 text-zinc-400 gap-4">
                         <Loader className="animate-spin" size={32} />
-                        <p className="text-xs font-bold uppercase tracking-widest">{isAnalyzing ? "Analyzing Ingredients..." : "Searching..."}</p>
+                        <p className="text-xs font-bold uppercase tracking-widest">{isAnalyzing ? "Analyzing Ingredients..." : "Searching INCI Decoder..."}</p>
                     </div>
                 ) : error ? (
                     <div className="flex flex-col items-center justify-center h-64 text-rose-500 gap-4 text-center">
