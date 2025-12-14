@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, X, Loader, AlertCircle } from 'lucide-react';
+import { Search, X, Loader, AlertCircle, ArrowRight } from 'lucide-react';
 import { Product, UserProfile } from '../types';
 import { analyzeProductFromSearch, searchProducts } from '../services/geminiService';
 
@@ -20,6 +20,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loadingText, setLoadingText] = useState("Analyzing Product...");
@@ -47,6 +48,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
     const handleSearch = async () => {
         if (!query.trim()) return;
         setIsSearching(true);
+        setHasSearched(true);
         setError(null);
         
         try {
@@ -93,14 +95,27 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                 </button>
                 <div className="flex-1 relative">
                     <input 
-                        className="w-full bg-zinc-100 rounded-full pl-10 pr-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                        className="w-full bg-zinc-100 rounded-full pl-10 pr-12 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                         placeholder="Search skincare product..."
                         value={query}
-                        onChange={e => setQuery(e.target.value)}
+                        onChange={e => {
+                            setQuery(e.target.value);
+                            setHasSearched(false);
+                        }}
                         onKeyDown={e => e.key === 'Enter' && handleSearch()}
                         autoFocus
                     />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    
+                    {/* Explicit Search Button inside Input */}
+                    {query && (
+                        <button 
+                            onClick={handleSearch}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-700 transition-all active:scale-95 shadow-md"
+                        >
+                            {isSearching ? <Loader size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -128,12 +143,22 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                             </button>
                         ))}
                         
-                        {results.length === 0 && query && !isSearching && (
+                        {/* Case: Has Typed but not searched */}
+                        {results.length === 0 && query && !hasSearched && (
+                             <div className="text-center text-zinc-300 mt-20 animate-in fade-in duration-500">
+                                <Search size={48} className="mx-auto mb-4 opacity-20" />
+                                <p className="text-sm font-medium">Tap the arrow to search</p>
+                             </div>
+                        )}
+                        
+                        {/* Case: Searched but no results */}
+                        {results.length === 0 && query && hasSearched && !isSearching && (
                              <div className="text-center text-zinc-400 mt-10">
                                 <p className="text-sm font-medium">No matching products found.</p>
                              </div>
                         )}
 
+                        {/* Case: Empty */}
                         {results.length === 0 && !query && (
                             <div className="text-center text-zinc-400 mt-20">
                                 <Search size={48} className="mx-auto mb-4 opacity-20" />
