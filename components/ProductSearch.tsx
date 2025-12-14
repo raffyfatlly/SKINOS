@@ -74,7 +74,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
                 <div className="flex-1 relative">
                     <input 
                         className="w-full bg-zinc-100 rounded-full pl-10 pr-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                        placeholder="Search Global Database..."
+                        placeholder="Search skincare product..."
                         value={query}
                         onChange={e => setQuery(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSearch()}

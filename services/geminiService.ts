@@ -65,14 +65,22 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
         User Query: "${query}"
         
         TASK:
-        1. Identify real-world skincare or cosmetic products that match the user's query.
-        2. Broaden the search: Use your global knowledge of skincare brands (e.g., CeraVe, The Ordinary, La Roche-Posay, Korean skincare, etc.).
-        3. If the user types a category (e.g. "moisturizer"), list 3-5 top-rated popular products.
-        4. Correct typos to match official brand/product names.
+        1. Search global skincare databases for products matching the query.
+        2. **Quantity**: Return a list of 5 to 10 relevant products. Do NOT return just one unless it's a unique ID.
+        3. **Robust Matching**: 
+           - If the user types a brand (e.g., "CeraVe"), list their top 5-10 best-sellers.
+           - If the user types a category (e.g., "Vitamin C Serum"), list 5-10 top-rated options from various reputable brands.
+           - If the user types a specific product name (e.g., "Effaclar"), list the exact product AND its related variations (e.g., Gel, Duo+, Serum).
+        4. Correct any typos (e.g., "Cerave cleansr" -> "CeraVe Hydrating Cleanser").
         
-        OUTPUT:
-        Strict JSON Array of objects.
-        Example: [{"brand": "BrandName", "name": "Product Name"}]
+        OUTPUT FORMAT:
+        Strict JSON Array of objects with 'brand' and 'name' keys.
+        Example: 
+        [
+          {"brand": "Brand A", "name": "Product Name 1"},
+          {"brand": "Brand A", "name": "Product Name 2"},
+          {"brand": "Brand B", "name": "Product Name 3"}
+        ]
         `;
         
         const response = await ai.models.generateContent({
