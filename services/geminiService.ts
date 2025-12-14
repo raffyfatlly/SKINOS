@@ -62,14 +62,13 @@ const getFallbackProduct = (userMetrics: SkinMetrics, name: string): Product => 
 export const searchProducts = async (query: string): Promise<{ name: string, brand: string }[]> => {
     return runWithRetry<{ name: string, brand: string }[]>(async (ai) => {
         const prompt = `
-        Act as a search bridge for the 'INCI Decoder' skincare database (incidecoder.com).
         User Query: "${query}"
         
         TASK:
-        1. Interpret the query to find skincare/cosmetic products that strictly exist on incidecoder.com.
-        2. Return the exact BRAND and PRODUCT NAME as they appear on the INCI Decoder site.
-        3. If the user types a category (e.g. "moisturizer"), suggest 3 popular top-rated products from INCI Decoder.
-        4. Correct any typos to match the official database entries.
+        1. Identify real-world skincare or cosmetic products that match the user's query.
+        2. Broaden the search: Use your global knowledge of skincare brands (e.g., CeraVe, The Ordinary, La Roche-Posay, Korean skincare, etc.).
+        3. If the user types a category (e.g. "moisturizer"), list 3-5 top-rated popular products.
+        4. Correct typos to match official brand/product names.
         
         OUTPUT:
         Strict JSON Array of objects.
