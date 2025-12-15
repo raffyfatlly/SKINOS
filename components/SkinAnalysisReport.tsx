@@ -307,6 +307,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
   
   const [isChartVisible, setIsChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
+  const treatmentRef = useRef<HTMLDivElement>(null); // New ref for auto-scrolling
 
   // If user is premium, features are unlocked by default
   const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(!!userProfile.isPremium);
@@ -329,6 +330,15 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       if (chartRef.current) observer.observe(chartRef.current);
       return () => observer.disconnect();
   }, []);
+
+  // Auto-Scroll when Treatment expands
+  useEffect(() => {
+    if (isTreatmentExpanded && treatmentRef.current) {
+        setTimeout(() => {
+            treatmentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 300);
+    }
+  }, [isTreatmentExpanded]);
 
   const clinicalSuggestions = useMemo(() => {
       return getClinicalTreatmentSuggestions(userProfile);
@@ -592,8 +602,9 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
       }
   };
 
+  // Increased bottom padding to 48 (12rem) to allow full scroll visibility above mobile navigation bars
   return (
-    <div className="space-y-12 pb-32">
+    <div className="space-y-12 pb-48">
         {/* PROGRESS TRACKER OVERLAY ON HERO */}
         <div className="modern-card rounded-[2.5rem] overflow-hidden relative group hover:shadow-2xl transition-shadow duration-500">
             <div className="relative w-full overflow-hidden aspect-[4/5] sm:aspect-[16/9] bg-black">
@@ -863,6 +874,7 @@ const SkinAnalysisReport: React.FC<SkinAnalysisReportProps> = ({ userProfile, sh
 
         {/* CLINICAL MENU SECTION (Renamed to Treatment for You) */}
         <div 
+            ref={treatmentRef}
             className={`modern-card rounded-[2.5rem] p-8 tech-reveal delay-200 cursor-pointer transition-colors duration-300 border-zinc-100 relative overflow-hidden
             ${isTreatmentExpanded ? 'bg-white shadow-xl ring-1 ring-teal-100' : 'bg-gradient-to-br from-white to-zinc-50 hover:bg-white hover:border-teal-200'}`}
             onClick={() => setIsTreatmentExpanded(!isTreatmentExpanded)}

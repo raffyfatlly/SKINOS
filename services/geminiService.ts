@@ -362,10 +362,33 @@ export const analyzeProductContext = (product: Product, shelf: Product[]) => {
 
 export const getClinicalTreatmentSuggestions = (user: UserProfile) => {
     const suggestions = [];
-    if (user.biometrics.acneActive < 60) suggestions.push({ type: 'FACIAL', name: 'Deep Pore Cleanse', benefit: 'Clears congestion', downtime: 'None' });
-    if (user.biometrics.wrinkleFine < 60) suggestions.push({ type: 'LASER', name: 'Fractional Laser', benefit: 'Boosts collagen', downtime: '2-3 Days' });
-    if (user.biometrics.pigmentation < 60) suggestions.push({ type: 'PEEL', name: 'Chemical Peel', benefit: 'Evens tone', downtime: '1-2 Days' });
-    return suggestions;
+    const b = user.biometrics;
+
+    // 1. High Priority (Low Scores) - Immediate Correction
+    if (b.acneActive < 70) suggestions.push({ type: 'FACIAL', name: 'Deep Pore Cleanse', benefit: 'Clears active congestion', downtime: 'None' });
+    if (b.acneScars < 70) suggestions.push({ type: 'LASER', name: 'Microneedling', benefit: 'Smooths texture & scars', downtime: '1-3 Days' });
+    if (b.pigmentation < 70) suggestions.push({ type: 'PEEL', name: 'Brightening Peel', benefit: 'Fades dark spots', downtime: '2-4 Days' });
+    if (b.wrinkleFine < 70) suggestions.push({ type: 'LASER', name: 'Fractional Laser', benefit: 'Stimulates collagen', downtime: '3-5 Days' });
+    if (b.redness < 70) suggestions.push({ type: 'LASER', name: 'IPL Therapy', benefit: 'Reduces redness', downtime: 'None' });
+    if (b.hydration < 60) suggestions.push({ type: 'FACIAL', name: 'Hydra-Infusion', benefit: 'Deep moisture boost', downtime: 'None' });
+    if (b.poreSize < 65) suggestions.push({ type: 'PEEL', name: 'Carbon Laser Peel', benefit: 'Refines pore size', downtime: 'None' });
+
+    // 2. Optimization (Medium Scores) - Improvement
+    if (suggestions.length < 2) {
+        if (b.texture < 85) suggestions.push({ type: 'PEEL', name: 'Enzyme Exfoliation', benefit: 'Smooths surface texture', downtime: 'None' });
+        if (b.sagging < 85) suggestions.push({ type: 'FACIAL', name: 'Microcurrent', benefit: 'Lifts and tones', downtime: 'None' });
+        if (b.darkCircles < 80) suggestions.push({ type: 'FACIAL', name: 'Lymphatic Massage', benefit: 'Reduces puffiness', downtime: 'None' });
+    }
+
+    // 3. Maintenance (High Scores or Fillers) - Glow & Health
+    if (suggestions.length < 2) {
+        suggestions.push({ type: 'FACIAL', name: 'LED Light Therapy', benefit: 'Maintains healthy glow', downtime: 'None' });
+        suggestions.push({ type: 'FACIAL', name: 'Oxygen Facial', benefit: 'Event-ready radiance', downtime: 'None' });
+    }
+
+    // Deduplicate by name and return max 3
+    const unique = suggestions.filter((v,i,a)=>a.findIndex(t=>(t.name===v.name))===i);
+    return unique.slice(0, 3);
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
