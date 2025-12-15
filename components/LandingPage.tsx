@@ -51,7 +51,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                     </div>
                     {/* Updated Headline: Removed background from 'Made simple', kept thickness */}
                     <h1 className="text-5xl sm:text-6xl font-black tracking-tighter leading-[0.9] text-white mb-6 drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-                        Skin care.<br/>
+                        Skincare.<br/>
                         <span className="text-3xl sm:text-4xl font-semibold text-white tracking-wide block mt-2 opacity-95">Made simple.</span>
                     </h1>
                     
@@ -62,9 +62,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                     <div className="flex flex-col sm:flex-row items-start gap-4">
                         <button 
                             onClick={onGetStarted} 
-                            className="w-full sm:w-auto bg-white text-zinc-900 px-8 py-4 rounded-full font-bold text-sm hover:bg-zinc-100 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-2xl"
+                            className="w-full sm:w-auto bg-white text-zinc-900 px-8 py-4 rounded-full hover:bg-zinc-100 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-2xl min-w-[180px] font-bold text-sm tracking-wide"
                         >
-                            Start Analysis <ArrowRight size={16} />
+                            Start Free Scan <ArrowRight size={16} />
                         </button>
                     </div>
                </div>
