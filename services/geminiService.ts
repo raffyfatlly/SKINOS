@@ -79,7 +79,7 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
            - **IF NO BRAND IS IDENTIFIED**:
              - Return 5-10 top-rated products from various reputable global brands that match the description.
         
-        3. **Robustness**: Fix typos (e.g., "nutrogena" -> "Neutrogena").
+        3. **Robustness**: Fix typos (e.g., "nutrogena" -> "Neutrogena"). Handle product name variations and aliases (e.g., "ANR" -> "Advanced Night Repair").
         
         OUTPUT FORMAT:
         Strict JSON Array of objects.
@@ -205,32 +205,36 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
 };
 
 /**
- * HYBRID VISION-KNOWLEDGE PIPELINE
- * 1. Vision: Identify Brand & Name (High Accuracy)
- * 2. Vision: Attempt to read ingredients (Medium Accuracy)
- * 3. Fallback: If ingredients are blurry/missing, use the Identified Name to fetch ingredients from Knowledge Base (High Accuracy)
+ * INTELLIGENT PRODUCT VISION PIPELINE (UPDATED V3)
+ * 1. Vision: Loose identification of text, logos, packaging clues AND Visual Context.
+ * 2. Authority Check: Gemini Cross-Reference with Variation Handling.
  */
 export const analyzeProductImage = async (base64: string, userMetrics: SkinMetrics): Promise<Product> => {
     return runWithRetry<Product>(async (ai) => {
         
-        // STEP 1: VISION RECOGNITION
-        // We prioritize identifying the *identity* of the product over OCR-ing 50 tiny ingredients.
+        // STEP 1: VISION RECOGNITION (LOOSE & DESCRIPTIVE)
         const visionPrompt = `
         Analyze this skincare product image. 
         
-        PHASE 1: IDENTIFICATION
-        - Extract the EXACT **Brand Name** and **Product Name**.
-        - Be extremely precise with the Product Name (e.g. distinguishing between "Hydrating Cleanser" vs "Foaming Cleanser").
+        PHASE 1: VISUAL IDENTIFICATION
+        - Look at the LOGO, COLOR SCHEME, BOTTLE SHAPE, and VISIBLE TEXT.
+        - Even if text is blurry, infer the Brand (e.g. Blue/White/Cera = CeraVe, Minimalist/White/Dropper = The Ordinary).
+        - Describe the visual context (e.g. "White bottle with blue text", "Small dark dropper").
         
-        PHASE 2: CONTENT CHECK
-        - Can you clearly read the full "Ingredients" or "INCI" list on this specific image?
-        - If the image is just the front of the bottle, the answer is NO.
-        - If the text is blurry or cut off, the answer is NO.
+        PHASE 2: TEXT EXTRACTION (Best Effort)
+        - Extract any readable text fragments for the Product Name.
+        - Do not worry about perfection. "Hyalu... B5" is enough context.
+        
+        PHASE 3: INGREDIENTS
+        - Are full ingredients visible? (Back of bottle usually).
+        - If yes, extract them into 'detectedIngredients'.
+        - If no, leave empty.
         
         OUTPUT JSON:
         { 
             "brand": "string", 
-            "name": "string", 
+            "name": "string (Guessed Name or Text Fragments)", 
+            "visualContext": "string (e.g. Blue pump bottle)",
             "hasReadableIngredients": boolean,
             "detectedIngredients": ["string"] 
         }
@@ -249,56 +253,68 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
 
         const visionData = parseJSONFromText(visionResponse.text || "{}");
 
-        // VALIDATION
         if (!visionData.name || visionData.name === "Unknown") {
-            throw new Error("Could not identify product. Please try scanning closer or type the name.");
+            throw new Error("Could not identify product. Please try scanning closer.");
         }
 
-        console.log("Vision Analysis:", visionData);
+        console.log("Vision Output:", visionData);
 
-        // STEP 2: HYBRID BRANCHING
-        // Strategy: If we have ingredients from OCR, use them. If not, use the high-confidence Name to fetch from KB.
+        // STEP 2: AUTHORITY CHECK & REFINEMENT
+        // We now have a "clue" (visionData). We ask Gemini to be the authority and standardize this.
         
-        let finalIngredients = visionData.detectedIngredients || [];
-        const isOCREmptyOrPartial = !visionData.hasReadableIngredients || finalIngredients.length < 5;
+        const refinementPrompt = `
+        CONTEXT:
+        Vision Output: "${visionData.brand} - ${visionData.name}"
+        Visual Context: "${visionData.visualContext}"
+        Detected Ingredients (OCR): ${JSON.stringify(visionData.detectedIngredients || [])}.
+        
+        USER METRICS: ${JSON.stringify(userMetrics)}
 
-        if (isOCREmptyOrPartial) {
-            console.log("OCR Partial/Empty. Switching to Knowledge Base Retrieval for:", visionData.name);
-            
-            // Call the text-based analysis which uses the LLM's internal knowledge
-            return await analyzeProductFromSearch(visionData.name, userMetrics, undefined, visionData.brand);
-        }
-
-        // STEP 3: DIRECT ANALYSIS (If OCR was perfect)
-        const analysisPrompt = `
-        Analyze this detected product based on OCR ingredients.
-        
-        Product: ${visionData.brand} - ${visionData.name}
-        Ingredients Found: ${JSON.stringify(finalIngredients)}
-        
-        User Metrics (Higher = Better): ${JSON.stringify(userMetrics)}.
-        
         TASK:
-        Evaluate suitability.
-        - If the ingredient list looks incomplete (e.g. just "Water, Glycerin"), penalize confidence or attempt to infer the rest based on the Product Name.
+        1. **IDENTIFICATION & NORMALIZATION (CRITICAL)**: 
+           - You are the Product Authority. The vision output might be partial (e.g. "Anua Soothing Toner") or contain typos.
+           - Identify the EXACT, CANONICAL product. 
+           - **HANDLE VARIATIONS**: Consider regional names, reformulations, and aliases (e.g. "Advanced Night Repair" vs "ANR", "CeraVe Foaming Cleanser" vs "CeraVe Foaming Facial Cleanser").
+           - If the name is ambiguous, use the 'Visual Context' (e.g. bottle color) to disambiguate.
+           
+        2. **INGREDIENT RETRIEVAL**: 
+           - IF the OCR ingredients above are comprehensive (>5 items) and look accurate, use them.
+           - IF OCR is empty, partial, or looks like noise, RETRIEVE the standard INCI list from your internal database for this exact product.
+           - **PRIORITIZE INTERNAL KNOWLEDGE** if the OCR looks messy or incomplete.
         
-        Return JSON: name, brand, type, ingredients, estimatedPrice, suitabilityScore, risks, benefits.
+        3. **ANALYSIS**:
+           - Analyze suitability for the user's skin metrics.
+
+        OUTPUT JSON:
+        {
+            "name": "string (Correct Full Commercial Name)",
+            "brand": "string (Correct Brand)",
+            "type": "CLEANSER" | "TONER" | "SERUM" | "MOISTURIZER" | "SPF" | "TREATMENT" | "FOUNDATION" | "OTHER",
+            "ingredients": ["string"],
+            "ingredientsSource": "OCR" | "KNOWLEDGE_BASE", 
+            "estimatedPrice": Number,
+            "suitabilityScore": Number,
+            "risks": [{ "ingredient": "Name", "riskLevel": "HIGH", "reason": "Why" }],
+            "benefits": [{ "ingredient": "Name", "target": "Target", "description": "Why", "relevance": "HIGH" }]
+        }
         `;
 
         const finalResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: analysisPrompt,
+            contents: refinementPrompt,
             config: { responseMimeType: 'application/json' }
         });
 
         const data = parseJSONFromText(finalResponse.text || "{}");
         
+        if (!data.name) throw new Error("Analysis failed during refinement.");
+
         return {
             id: Date.now().toString(),
-            name: data.name || visionData.name,
-            brand: data.brand || visionData.brand,
+            name: data.name,
+            brand: data.brand || visionData.brand, // Fallback to vision brand if refinement misses it
             type: data.type || "UNKNOWN",
-            ingredients: data.ingredients || finalIngredients,
+            ingredients: data.ingredients || [],
             estimatedPrice: data.estimatedPrice || 0,
             suitabilityScore: data.suitabilityScore || 50,
             risks: data.risks || [],

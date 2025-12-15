@@ -34,8 +34,8 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
     if (isProcessing) {
         const messages = [
             "Scanning product identity...",
-            "Reading label text...",
-            "Consulting global formulation database...",
+            "Consulting global database...",
+            "Resolving name variations...",
             "Checking ingredient safety...",
             "Calculating match score..."
         ];
