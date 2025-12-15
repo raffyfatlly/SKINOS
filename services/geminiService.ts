@@ -204,21 +204,34 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
     }, { ...getFallbackProduct(userMetrics, productName), suitabilityScore: consistencyScore || 75, brand: knownBrand || "Unknown Brand" }, 45000); 
 };
 
+/**
+ * HYBRID VISION-KNOWLEDGE PIPELINE
+ * 1. Vision: Identify Brand & Name (High Accuracy)
+ * 2. Vision: Attempt to read ingredients (Medium Accuracy)
+ * 3. Fallback: If ingredients are blurry/missing, use the Identified Name to fetch ingredients from Knowledge Base (High Accuracy)
+ */
 export const analyzeProductImage = async (base64: string, userMetrics: SkinMetrics): Promise<Product> => {
     return runWithRetry<Product>(async (ai) => {
-        // STEP 1: Vision - Identify what we are looking at
-        const visionPrompt = `
-        Analyze this skincare product image.
         
-        TASK:
-        1. Extract the EXACT Brand Name and Product Name.
-        2. Check if a full ingredient list (INCI) is visible and readable in this specific image.
+        // STEP 1: VISION RECOGNITION
+        // We prioritize identifying the *identity* of the product over OCR-ing 50 tiny ingredients.
+        const visionPrompt = `
+        Analyze this skincare product image. 
+        
+        PHASE 1: IDENTIFICATION
+        - Extract the EXACT **Brand Name** and **Product Name**.
+        - Be extremely precise with the Product Name (e.g. distinguishing between "Hydrating Cleanser" vs "Foaming Cleanser").
+        
+        PHASE 2: CONTENT CHECK
+        - Can you clearly read the full "Ingredients" or "INCI" list on this specific image?
+        - If the image is just the front of the bottle, the answer is NO.
+        - If the text is blurry or cut off, the answer is NO.
         
         OUTPUT JSON:
         { 
             "brand": "string", 
             "name": "string", 
-            "hasVisibleIngredients": boolean,
+            "hasReadableIngredients": boolean,
             "detectedIngredients": ["string"] 
         }
         `;
@@ -236,29 +249,41 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
 
         const visionData = parseJSONFromText(visionResponse.text || "{}");
 
-        // STEP 2: Decision Tree
-        // If we DON'T see ingredients (e.g. Front Label), use the Search Engine (Knowledge Base) to fetch them.
-        if (!visionData.hasVisibleIngredients || !visionData.detectedIngredients || visionData.detectedIngredients.length < 5) {
-            console.log("Front label detected. Switching to Global Database Lookup for:", visionData.name);
+        // VALIDATION
+        if (!visionData.name || visionData.name === "Unknown") {
+            throw new Error("Could not identify product. Please try scanning closer or type the name.");
+        }
+
+        console.log("Vision Analysis:", visionData);
+
+        // STEP 2: HYBRID BRANCHING
+        // Strategy: If we have ingredients from OCR, use them. If not, use the high-confidence Name to fetch from KB.
+        
+        let finalIngredients = visionData.detectedIngredients || [];
+        const isOCREmptyOrPartial = !visionData.hasReadableIngredients || finalIngredients.length < 5;
+
+        if (isOCREmptyOrPartial) {
+            console.log("OCR Partial/Empty. Switching to Knowledge Base Retrieval for:", visionData.name);
             
-            if (!visionData.name || visionData.name === "Unknown") {
-                 throw new Error("Could not identify product name from image.");
-            }
-            
-            // Delegate to the search engine logic which retrieves ingredients from internal knowledge
+            // Call the text-based analysis which uses the LLM's internal knowledge
             return await analyzeProductFromSearch(visionData.name, userMetrics, undefined, visionData.brand);
         }
 
-        // STEP 3: If we DO see ingredients, score them directly here
+        // STEP 3: DIRECT ANALYSIS (If OCR was perfect)
         const analysisPrompt = `
-        Analyze this detected product.
-        Brand: ${visionData.brand}
-        Name: ${visionData.name}
-        Detected Ingredients (from OCR): ${JSON.stringify(visionData.detectedIngredients)}
+        Analyze this detected product based on OCR ingredients.
         
-        Evaluate suitability for user with metrics: ${JSON.stringify(userMetrics)}.
+        Product: ${visionData.brand} - ${visionData.name}
+        Ingredients Found: ${JSON.stringify(finalIngredients)}
         
-        Return JSON: name, brand, type, ingredients (use detected list), estimatedPrice (number), suitabilityScore (0-100), risks (array of {ingredient, riskLevel, reason}), benefits (array of {ingredient, target, description, relevance}).`;
+        User Metrics (Higher = Better): ${JSON.stringify(userMetrics)}.
+        
+        TASK:
+        Evaluate suitability.
+        - If the ingredient list looks incomplete (e.g. just "Water, Glycerin"), penalize confidence or attempt to infer the rest based on the Product Name.
+        
+        Return JSON: name, brand, type, ingredients, estimatedPrice, suitabilityScore, risks, benefits.
+        `;
 
         const finalResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -267,19 +292,21 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
         });
 
         const data = parseJSONFromText(finalResponse.text || "{}");
+        
         return {
             id: Date.now().toString(),
-            name: data.name || visionData.name || "Unknown Product",
-            brand: data.brand || visionData.brand || "Unknown Brand",
+            name: data.name || visionData.name,
+            brand: data.brand || visionData.brand,
             type: data.type || "UNKNOWN",
-            ingredients: data.ingredients || [],
+            ingredients: data.ingredients || finalIngredients,
             estimatedPrice: data.estimatedPrice || 0,
             suitabilityScore: data.suitabilityScore || 50,
             risks: data.risks || [],
             benefits: data.benefits || [],
             dateScanned: Date.now()
         };
-    }, getFallbackProduct(userMetrics, "Scanned Product"), 60000); // Increased timeout to 60s for 2-step process
+
+    }, getFallbackProduct(userMetrics, "Scanned Product"), 60000); 
 };
 
 export const auditProduct = (product: Product, user: UserProfile) => {
