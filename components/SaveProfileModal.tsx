@@ -189,12 +189,12 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                 </p>
             </div>
 
-            {/* Benefits List (Only on Signup) - Compacted */}
+            {/* Benefits List (Only on Signup) - Updated Text */}
             {!isLoginView && (
                 <div className="bg-zinc-50/80 rounded-xl p-3 mb-4 border border-zinc-100/80 space-y-2">
                     <Feature icon={Cloud} text="Cloud Sync Across Devices" />
-                    <Feature icon={History} text="Track Monthly Progress" />
-                    <Feature icon={Sparkles} text="Unlock Rescan & Search" />
+                    <Feature icon={History} text="Track Skin Goal Progress" />
+                    <Feature icon={Sparkles} text="Unlock Rescan & Product Search" />
                 </div>
             )}
 

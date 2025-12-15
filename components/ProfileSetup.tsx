@@ -707,7 +707,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                                      <Edit2 size={14} />
                                  </button>
                              </div>
-                             <p className="text-sm font-bold text-white mt-1 drop-shadow-sm opacity-95">{user.age} Years • {user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin</p>
+                             {/* HIDE Unknown Skin Text Logic */}
+                             <p className="text-sm font-bold text-white mt-1 drop-shadow-sm opacity-95">
+                                 {user.age} Years{user.skinType !== 'UNKNOWN' ? ` • ${user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin` : ''}
+                             </p>
                           </>
                       )}
                       {auth && auth.currentUser && !isEditingProfile && (

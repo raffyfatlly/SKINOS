@@ -11,6 +11,18 @@ interface FaceScannerProps {
   onCancel?: () => void;
 }
 
+const SCAN_TIPS = [
+  "Natural daylight provides the most accurate skin tone analysis.",
+  "Pulling hair back helps us analyze your forehead texture.",
+  "Removing glasses ensures accurate under-eye analysis.",
+  "A neutral expression helps detect resting fine lines accurately.",
+  "Scanning at the same time of day improves progress tracking.",
+  "Wiping your camera lens can significantly improve score accuracy.",
+  "Avoid harsh overhead lighting to reduce shadow interference.",
+  "For best results, remove makeup before scanning.",
+  "Consistent weekly scans build the most accurate skin profile."
+];
+
 const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, onCancel }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -32,6 +44,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
   const [instruction, setInstruction] = useState<string>("Align Face");
   const [statusColor, setStatusColor] = useState<'default'|'warning'|'error'>('default');
   const [capturedSnapshot, setCapturedSnapshot] = useState<string | null>(null);
+  const [currentTip, setCurrentTip] = useState<string>("");
   
   // Focus Logic
   const [showFocusTarget, setShowFocusTarget] = useState<{x: number, y: number} | null>(null);
@@ -80,19 +93,40 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
     };
   }, []);
 
-  // Simulate AI Progress
+  // Simulate AI Progress & Cycle Tips
   useEffect(() => {
-      let interval: ReturnType<typeof setInterval>;
+      let progressInterval: ReturnType<typeof setInterval>;
+      let tipInterval: ReturnType<typeof setInterval>;
+
       if (isProcessingAI) {
+          // Helper to get random tip excluding current
+          const getRandomTip = (exclude?: string) => {
+              const available = exclude ? SCAN_TIPS.filter(t => t !== exclude) : SCAN_TIPS;
+              return available[Math.floor(Math.random() * available.length)];
+          };
+
+          // Set initial tip
+          setCurrentTip(getRandomTip());
+          
           setAiProgress(0);
-          interval = setInterval(() => {
+          
+          // Progress Bar Simulation (Slower to allow reading tips)
+          progressInterval = setInterval(() => {
               setAiProgress(prev => {
                   if (prev >= 90) return prev; 
-                  return prev + 2;
+                  return prev + 0.8; // Approx 5-6 seconds to reach 90%
               });
           }, 50);
+
+          // Cycle Tips every 4 seconds (Slowed down from 2s)
+          tipInterval = setInterval(() => {
+              setCurrentTip(prev => getRandomTip(prev));
+          }, 4000);
       }
-      return () => clearInterval(interval);
+      return () => {
+          clearInterval(progressInterval);
+          clearInterval(tipInterval);
+      };
   }, [isProcessingAI]);
 
   // Handle Manual Focus Tap
@@ -407,7 +441,18 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
                      </div>
                  </div>
                  <h2 className="text-3xl font-black text-white tracking-tight mb-2 text-center">Analyzing</h2>
-                 <p className="text-teal-200 text-xs font-bold tracking-widest uppercase mb-8 animate-pulse text-center">{getAIStatusText(aiProgress)}</p>
+                 <p className="text-teal-200 text-xs font-bold tracking-widest uppercase mb-4 animate-pulse text-center">{getAIStatusText(aiProgress)}</p>
+                 
+                 {/* PRO TIP DISPLAY (Animated) */}
+                 <div key={currentTip} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 mt-4 animate-in slide-in-from-bottom-4 fade-in duration-500 flex flex-col items-center text-center max-w-xs min-h-[100px] justify-center">
+                     <div className="flex items-center gap-2 mb-2 text-teal-400">
+                         <Lightbulb size={14} />
+                         <span className="text-[10px] font-bold uppercase tracking-widest">Pro Tip</span>
+                     </div>
+                     <p className="text-white/80 text-xs font-medium leading-relaxed">
+                         {currentTip}
+                     </p>
+                 </div>
              </div>
           </div>
       )
