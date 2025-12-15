@@ -35,9 +35,11 @@ const ProductScanner: React.FC<ProductScannerProps> = ({ userProfile, onProductF
         let i = 0;
         setLoadingText(messages[0]);
         interval = setInterval(() => {
-            i = (i + 1) % messages.length;
-            setLoadingText(messages[i]);
-        }, 2000); 
+            if (i < messages.length - 1) {
+                i++;
+                setLoadingText(messages[i]);
+            }
+        }, 3000); 
     }
     return () => clearInterval(interval);
   }, [isProcessing]);

@@ -37,10 +37,13 @@ const ProductSearch: React.FC<ProductSearchProps> = ({ userProfile, onProductFou
             ];
             let i = 0;
             setLoadingText(messages[0]);
+            // Increased interval to 3500ms and removed looping to prevent "restart" confusion
             interval = setInterval(() => {
-                i = (i + 1) % messages.length;
-                setLoadingText(messages[i]);
-            }, 2500);
+                if (i < messages.length - 1) {
+                    i++;
+                    setLoadingText(messages[i]);
+                }
+            }, 3500);
         }
         return () => clearInterval(interval);
     }, [isAnalyzing]);
