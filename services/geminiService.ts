@@ -473,23 +473,34 @@ export const getBuyingDecision = (product: Product, shelf: Product[], user: User
 export const generateRoutineRecommendations = async (user: UserProfile): Promise<any> => {
     return runWithRetry<any>(async (ai) => {
         const prompt = `
-        ACT AS AN EXPERT DERMATOLOGIST.
+        ACT AS AN EXPERT DERMATOLOGIST SPECIALIZING IN THE MALAYSIAN MARKET.
         User Profile: Age ${user.age}, Skin Type ${user.skinType}.
         Metrics (0-100, higher is better): ${JSON.stringify(user.biometrics)}.
         Goals: ${JSON.stringify(user.preferences?.goals || [])}.
         Sensitivity: ${user.preferences?.sensitivity || 'MILD'}.
 
+        CONTEXT:
+        The user is located in Malaysia. Recommendations must be accessible via Watsons, Guardian, Sephora Malaysia, or Official Shopee Mall stores.
+
         TASK:
         Generate a comprehensive AM and PM skincare routine.
-        For EACH step (Cleanser, Eye Treatment, Serum, Moisturizer, SPF), provide exactly 3 specific real-world product recommendations corresponding to price tiers:
-        1. BUDGET (Effective, affordable, drugstore e.g. CeraVe, Ordinary, Inkey List)
-        2. VALUE (Mid-range, high efficacy e.g. La Roche-Posay, Paula's Choice, Cosrx)
-        3. LUXURY (High-end, premium formulation e.g. Skinceuticals, Tatcha, Dr. Dennis Gross)
+        For EACH step (Cleanser, Serum, Moisturizer, SPF), provide exactly 3 specific real-world product recommendations corresponding to price tiers:
+
+        1. **BUDGET (Approx RM 20 - RM 60)**: High-value drugstore favorites.
+           - *Focus*: Aiken, Safi, Hada Labo, Simple, The Ordinary, Inkey List, Cetaphil.
+        
+        2. **VALUE (Approx RM 60 - RM 180)**: Trending "Cult Favorites" (Asian Beauty) & Derm brands.
+           - *Focus*: Skintific, Axis-Y, COSRX, Beauty of Joseon, La Roche-Posay, Paula's Choice, Eucerin, Torriden.
+        
+        3. **LUXURY (RM 180+)**: Premium & Sephora MY bestsellers.
+           - *Focus*: Tatcha, SK-II, Estee Lauder, Kiehl's, Drunk Elephant, Dermalogica, Sunday Riley.
 
         IMPORTANT RULES:
-        - Products MUST be safe for the user's specific metrics (e.g. if redness < 50, strictly no harsh scrubs/fragrance).
-        - PRICES MUST BE ESTIMATED IN MALAYSIAN RINGGIT (RM).
-        - Provide a short "Why?" for each product explaining its fit for the user's metrics.
+        - **LOCAL HYPE**: Include trending viral products in Malaysia (e.g., Skintific 5X Ceramide, Axis-Y Dark Spot Serum, COSRX Snail Mucin) if they suit the skin type.
+        - **CLIMATE FIT**: Account for Malaysia's hot, humid weather (e.g. prefer lightweight gels/water-creams over heavy butters unless skin is very dry).
+        - **SAFETY**: Products MUST be safe for the user's specific metrics.
+        - **PRICING**: Estimate prices in MALAYSIAN RINGGIT (RM).
+        - **WHY**: Provide a short "Why?" explaining the fit.
 
         OUTPUT FORMAT (Strict JSON):
         {
@@ -497,9 +508,9 @@ export const generateRoutineRecommendations = async (user: UserProfile): Promise
             {
               "step": "Cleanser",
               "products": [
-                { "name": "...", "brand": "...", "tier": "BUDGET", "price": "RM 35", "reason": "...", "rating": 95 },
-                { "name": "...", "brand": "...", "tier": "VALUE", "price": "RM 85", "reason": "...", "rating": 98 },
-                { "name": "...", "brand": "...", "tier": "LUXURY", "price": "RM 250", "reason": "...", "rating": 97 }
+                { "name": "...", "brand": "...", "tier": "BUDGET", "price": "RM XX", "reason": "...", "rating": 95 },
+                { "name": "...", "brand": "...", "tier": "VALUE", "price": "RM XX", "reason": "...", "rating": 98 },
+                { "name": "...", "brand": "...", "tier": "LUXURY", "price": "RM XX", "reason": "...", "rating": 97 }
               ]
             },
             ... other steps (Serum, Moisturizer, SPF)
@@ -509,7 +520,7 @@ export const generateRoutineRecommendations = async (user: UserProfile): Promise
                "step": "Cleanser", ...
             },
             {
-               "step": "Eye Treatment", ... (Include Eye Puffiness/Dark Circle treatment here)
+               "step": "Treatment", ... (Include Eye or Spot treatment if needed)
             },
             ... other steps (Serum, Moisturizer - No SPF)
           ]
