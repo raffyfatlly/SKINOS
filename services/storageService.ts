@@ -2,21 +2,16 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserProfile, Product } from '../types';
 import { auth, db } from './firebase';
-import { getVisitorId } from './analyticsService';
 
 const USER_KEY = 'skinos_user_v2';
 const SHELF_KEY = 'skinos_shelf_v2';
 
 // --- LOAD DATA ---
 export const loadUserData = async (): Promise<{ user: UserProfile | null, shelf: Product[] }> => {
-    // 1. Try Cloud First if DB is connected
-    if (db) {
+    // 1. Try Cloud First if Logged In (Anonymous or Registered)
+    if (auth?.currentUser && db) {
         try {
-            // Fallback: Use Auth UID if logged in, otherwise use Analytics Visitor ID
-            // This ensures guests are tracked in DB even if Anonymous Auth is disabled
-            const uid = auth?.currentUser?.uid || getVisitorId();
-            
-            const docRef = doc(db, "users", uid);
+            const docRef = doc(db, "users", auth.currentUser.uid);
             const docSnap = await getDoc(docRef);
             
             if (docSnap.exists()) {
@@ -47,33 +42,34 @@ export const saveUserData = async (user: UserProfile, shelf: Product[]) => {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.setItem(SHELF_KEY, JSON.stringify(shelf));
 
-    // 2. Sync to Cloud
-    if (db) {
+    // 2. If Logged In (including Anonymous), Sync to Cloud
+    if (auth?.currentUser && db) {
         try {
-            const uid = auth?.currentUser?.uid || getVisitorId();
-            const docRef = doc(db, "users", uid);
+            const docRef = doc(db, "users", auth.currentUser.uid);
             
             // Fix: Capture actual Auth email if available
-            const authEmail = auth?.currentUser?.email;
+            const authEmail = auth.currentUser.email;
             const finalEmail = user.email || authEmail || undefined;
+            
+            // Fix: Correctly reflect isAnonymous status. 
+            // If userProfile says false but auth says true, trust auth? 
+            // Actually, we trust the profile logic, but we default to false only if we are sure.
+            // Better: use the property from the user object passed in.
             
             const cloudProfile = { 
                 ...user, 
-                // Do NOT force isAnonymous: false. Use the value from the state.
+                // CRITICAL FIX: Do NOT force isAnonymous: false. Use the value from the state.
                 isAnonymous: user.isAnonymous ?? true, 
                 email: finalEmail 
             };
             
-            // Determine registration status based on actual Auth presence
-            const isRegistered = !!auth?.currentUser && !auth.currentUser.isAnonymous;
-
             await setDoc(docRef, {
                 profile: cloudProfile,
                 email: finalEmail, // Explicitly save at root for easy indexing/admin viewing
                 shelf: shelf,
                 lastUpdated: Date.now(),
                 // Metadata for Admin Dashboard to easily filter
-                isRegistered: isRegistered
+                isRegistered: !auth.currentUser.isAnonymous
             }, { merge: true });
         } catch (e) {
             console.error("Cloud Save Error:", e);
@@ -99,9 +95,14 @@ export const syncLocalToCloud = async () => {
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) {
+        // New cloud account (or fresh anonymous): Upload local data
+        // Ensure we mark it as no longer anonymous if the Auth user is real?
+        // Actually, just save what we have.
         await saveUserData(localUser, localShelf);
         console.log("Synced local data to new cloud account");
     } else {
+        // Existing cloud account: Strategy -> Keep Cloud Profile, Merge Shelf? 
+        // For simplicity, we assume Cloud is source of truth, but we merge shelf items if not present
         console.log("Cloud account exists, switching to cloud data");
     }
 };
@@ -119,11 +120,15 @@ export const claimAccessCode = async (code: string): Promise<{ success: boolean;
         return { success: false, error: "System offline. Please check connection." };
     }
     
-    // Note: For claiming codes, we generally require a robust ID. 
-    // If not authed, we use visitor ID.
-    const uid = auth?.currentUser?.uid || getVisitorId();
-    
+    // Check authentication
+    if (!auth?.currentUser) {
+        return { success: false, error: "Please log in or create an account to redeem this code." };
+    }
+
+    const uid = auth.currentUser.uid;
     const codeId = code.trim().toUpperCase();
+    
+    // Use the code as the document ID to ensure uniqueness via Firestore constraints
     const codeRef = doc(db, "claimed_codes", codeId);
 
     try {

@@ -104,11 +104,7 @@ export const signInAnonymously = async () => {
     try {
         const result = await firebaseSignInAnonymously(auth);
         return result.user;
-    } catch (e: any) {
-        if (e.code === 'auth/admin-restricted-operation') {
-            console.warn("⚠️ Anonymous Auth is disabled in Firebase Console. Proceeding with local visitor tracking.");
-            return null; // Return null gracefully so app can fallback to custom ID
-        }
+    } catch (e) {
         console.error("Anonymous Sign In Error", e);
         return null;
     }
