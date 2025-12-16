@@ -123,37 +123,37 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
           case 'SCAN_PRODUCT':
               return {
                   title: "Unlock Smart Scanner",
-                  desc: "Create a free account to analyze ingredients and save matches to your shelf.",
+                  desc: <><strong className="text-zinc-900 font-bold">Create a free account</strong> to analyze ingredients and save matches to your shelf.</>,
                   icon: ScanBarcode
               };
           case 'RESCAN_FACE':
               return {
                   title: "Track Skin Health",
-                  desc: "Create a free account to save your baseline and measure how your metrics improve over time.",
+                  desc: <><strong className="text-zinc-900 font-bold">Create a free account</strong> to save your baseline and measure how your metrics improve over time.</>,
                   icon: Sparkles
               };
           case 'VIEW_PROGRESS':
               return {
                   title: "Unlock Trends",
-                  desc: "Create an account to visualize your skin health journey and see what's working.",
+                  desc: <><strong className="text-zinc-900 font-bold">Create a free account</strong> to visualize your skin health journey and see what's working.</>,
                   icon: LineChart
               };
           case 'SAVE_RESULTS':
               return {
                   title: "Save Your Results",
-                  desc: "Don't lose this analysis. Create an account to access it later.",
+                  desc: <>Don't lose this analysis. <strong className="text-zinc-900 font-bold">Create a free account</strong> to access it later.</>,
                   icon: ShieldCheck
               };
           case 'UNLOCK_DEAL':
               return {
                   title: "Claim Exclusive Offer",
-                  desc: "Create a free account to unlock premium features and secure your lifetime access.",
+                  desc: <><strong className="text-zinc-900 font-bold">Create a free account</strong> to unlock premium features and secure your lifetime access.</>,
                   icon: Crown
               };
           default:
               return {
                   title: "Save Your Skin DNA",
-                  desc: "Create a free account to unlock progress tracking and cloud sync.",
+                  desc: <><strong className="text-zinc-900 font-bold">Create a free account</strong> to unlock progress tracking and cloud sync.</>,
                   icon: Fingerprint
               };
       }
@@ -184,9 +184,9 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
                 <h2 className="text-xl font-black text-zinc-900 tracking-tight mb-1">
                     {content.title}
                 </h2>
-                <p className="text-xs font-medium text-zinc-500 leading-relaxed max-w-[240px] mx-auto">
+                <div className="text-xs font-medium text-zinc-500 leading-relaxed max-w-[240px] mx-auto">
                     {content.desc}
-                </p>
+                </div>
             </div>
 
             {/* Benefits List (Only on Signup) - Updated Text */}
