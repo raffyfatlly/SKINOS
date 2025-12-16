@@ -5,12 +5,16 @@ import {
   Search, Bell, Settings, Calendar, ChevronDown, MoreHorizontal, 
   ArrowUpRight, Users, Zap, Activity, Clock, CheckCircle2, 
   BarChart3, LayoutGrid, Home, Wallet, FileText, LogOut,
-  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck
+  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X
 } from 'lucide-react';
 
 interface AdminDashboardProps {
   onBack: () => void;
 }
+
+// Format timestamp nicely
+const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const formatDate = (ts: number) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [data, setData] = useState<any>(null);
@@ -20,6 +24,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   
   // Filter State
   const [showRegisteredOnly, setShowRegisteredOnly] = useState(false);
+  
+  // User Drill-down State
+  const [selectedUser, setSelectedUser] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -228,8 +235,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h4 className="font-black text-zinc-900">User List</h4>
-                                    <p className="text-xs text-zinc-400">By Token Consumption</p>
+                                    <h4 className="font-black text-zinc-900">User Inspector</h4>
+                                    <p className="text-xs text-zinc-400">Click a user to see detailed logs</p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button 
@@ -239,7 +246,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <Filter size={14} /> 
                                         {showRegisteredOnly ? 'Registered Only' : 'All Visitors'}
                                     </button>
-                                    <button className="text-indigo-600 text-xs font-bold bg-indigo-50 px-3 py-1.5 rounded-lg">Export CSV</button>
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
@@ -247,11 +253,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                     <thead>
                                         <tr className="text-[10px] text-zinc-400 uppercase tracking-widest border-b border-zinc-100">
                                             <th className="pb-3 pl-2">User Identity</th>
-                                            <th className="pb-3">Status</th>
+                                            <th className="pb-3">Last Active</th>
                                             <th className="pb-3 text-center">Sessions</th>
-                                            <th className="pb-3 text-right">Avg Tokens</th>
+                                            <th className="pb-3 text-right">Events</th>
                                             <th className="pb-3 text-right">Total Tokens</th>
-                                            <th className="pb-3 text-right pr-2">Est. Cost</th>
+                                            <th className="pb-3 text-right pr-2">Cost</th>
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm">
@@ -263,25 +269,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                             </tr>
                                         ) : (
                                             filteredUsers.slice(0, 10).map((u: any, i: number) => (
-                                                <tr key={i} className="group hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0">
+                                                <tr 
+                                                    key={i} 
+                                                    onClick={() => setSelectedUser(u)}
+                                                    className="group hover:bg-indigo-50/50 cursor-pointer transition-colors border-b border-zinc-50 last:border-0"
+                                                >
                                                     <td className="py-3 pl-2">
                                                         <div className="flex flex-col">
-                                                            <span className="font-bold text-zinc-900 text-sm">
+                                                            <span className="font-bold text-zinc-900 text-sm group-hover:text-indigo-700">
                                                                 {u.identity.length > 25 ? u.identity.substr(0,25) + '...' : u.identity}
                                                             </span>
-                                                            {u.email && (
-                                                                <span className="text-[10px] text-zinc-400 font-medium">{u.email}</span>
-                                                            )}
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${u.isRegistered ? 'bg-indigo-100 text-indigo-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                                                                    {u.isRegistered ? <UserCheck size={8} /> : null}
+                                                                    {u.isRegistered ? 'User' : 'Guest'}
+                                                                </span>
+                                                                {u.email && (
+                                                                    <span className="text-[10px] text-zinc-400 font-medium">{u.email}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td className="py-3">
-                                                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase ${u.isRegistered ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-zinc-100 text-zinc-500'}`}>
-                                                            {u.isRegistered ? <UserCheck size={10} /> : null}
-                                                            {u.isRegistered ? 'Registered' : 'Guest'}
-                                                        </span>
+                                                        <div className="text-xs text-zinc-600">
+                                                            <span className="font-bold block text-zinc-800">{formatDate(u.lastSeen)}</span>
+                                                            <span className="text-zinc-400 text-[10px]">{formatTime(u.lastSeen)}</span>
+                                                        </div>
                                                     </td>
                                                     <td className="py-3 font-medium text-zinc-600 text-center">{u.sessionCount}</td>
-                                                    <td className="py-3 font-medium text-zinc-600 text-right">{Math.round(u.avgTokensPerSession)}</td>
+                                                    <td className="py-3 font-medium text-zinc-600 text-right">{u.actions}</td>
                                                     <td className="py-3 font-bold text-indigo-600 text-right">{(u.tokens / 1000).toFixed(1)}k</td>
                                                     <td className="py-3 text-right pr-2 text-xs font-bold text-emerald-600">
                                                         RM {u.estimatedCost.toFixed(4)}
@@ -316,7 +332,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <div>
                                             <h5 className="text-sm font-bold text-zinc-800 leading-tight">{log.name.replace(/_/g, ' ')}</h5>
                                             <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide mt-0.5">
-                                                {new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {log.tokens ? `${log.tokens} Tok` : 'Action'}
+                                                {formatTime(log.timestamp)} • {log.tokens ? `${log.tokens} Tok` : 'Action'}
                                             </p>
                                             {log.userId && (
                                                 <span className="text-[9px] text-indigo-400 block mt-0.5">User: {log.userId.substr(0,5)}...</span>
@@ -362,6 +378,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                     </div>
                 </div>
             </div>
+
+            {/* USER DETAIL MODAL */}
+            {selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
+                        <div className="bg-zinc-50 p-6 border-b border-zinc-100 flex justify-between items-start">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-xl font-black text-zinc-900">{selectedUser.identity}</h3>
+                                    {selectedUser.isRegistered && <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Registered</span>}
+                                </div>
+                                {selectedUser.email && <p className="text-sm text-zinc-500 font-medium mb-1">{selectedUser.email}</p>}
+                                <div className="flex gap-4 mt-2">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase">First Seen: {formatDate(selectedUser.firstSeen)}</span>
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Last Seen: {formatTime(selectedUser.lastSeen)}</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setSelectedUser(null)} className="p-2 bg-white rounded-full border border-zinc-100 hover:bg-zinc-100 transition-colors">
+                                <X size={20} className="text-zinc-400" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-6 bg-white">
+                            <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Activity Log</h4>
+                            <div className="relative border-l-2 border-zinc-100 ml-3 space-y-6">
+                                {selectedUser.history.map((event: any, idx: number) => (
+                                    <div key={idx} className="relative pl-6">
+                                        <div className={`absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full border-2 border-white ${event.type === 'AI_USAGE' ? 'bg-amber-400' : event.type === 'CONVERSION' ? 'bg-emerald-500' : 'bg-indigo-400'}`}></div>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <span className="text-xs font-bold text-zinc-900 block">{event.name.replace(/_/g, ' ')}</span>
+                                                <span className="text-[10px] text-zinc-400 font-medium">{formatDate(event.timestamp)} at {formatTime(event.timestamp)}</span>
+                                            </div>
+                                            {event.tokens > 0 && (
+                                                <span className="text-[10px] font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded border border-amber-100">
+                                                    {event.tokens} Tok
+                                                </span>
+                                            )}
+                                        </div>
+                                        {/* Optional Details Rendering */}
+                                        {event.details && (event.details.query || event.details.productName) && (
+                                            <div className="mt-2 bg-zinc-50 p-2 rounded text-[10px] text-zinc-500 font-mono border border-zinc-100">
+                                                {event.details.query && `Query: "${event.details.query}"`}
+                                                {event.details.productName && `Product: "${event.details.productName}"`}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center text-xs font-bold text-zinc-500">
+                            <span>Total Lifetime Cost</span>
+                            <span className="text-emerald-600 text-lg">RM {selectedUser.estimatedCost.toFixed(4)}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     </div>
   );

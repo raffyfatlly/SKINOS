@@ -48,7 +48,11 @@ export const trackEvent = async (
         sessionId,
         userId: finalUserId,
         timestamp: Date.now(),
-        details,
+        details: {
+            ...details,
+            userAgent: navigator.userAgent, // Capture device info
+            path: window.location.pathname
+        },
         tokens: details.tokens || 0
     };
 
@@ -132,11 +136,13 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             isRegistered: boolean,
             tokens: number, 
             sessions: Set<string>,
+            firstSeen: number,
             lastSeen: number, 
             actions: number,
             lastAction: string,
             email?: string,
-            originalUid?: string
+            originalUid?: string,
+            history: any[] // Store event history
         }> = {};
 
         recentEvents.forEach(e => {
@@ -162,20 +168,35 @@ export const getAnalyticsSummary = async (days: number = 7) => {
                     originalUid: e.userId,
                     tokens: 0, 
                     sessions: new Set(),
-                    lastSeen: 0, 
+                    firstSeen: e.timestamp,
+                    lastSeen: e.timestamp, 
                     actions: 0,
-                    lastAction: ''
+                    lastAction: '',
+                    history: []
                 };
             }
             
+            // Update Aggregates
             userUsage[key].tokens += (e.tokens || 0);
             userUsage[key].actions += 1;
             userUsage[key].lastAction = e.name;
             if (e.sessionId) userUsage[key].sessions.add(e.sessionId);
             
-            // Update timestamps
+            // Update Timestamps
             if (e.timestamp > userUsage[key].lastSeen) userUsage[key].lastSeen = e.timestamp;
+            if (e.timestamp < userUsage[key].firstSeen) userUsage[key].firstSeen = e.timestamp;
             
+            // Add to History (Max 50 per user to keep payload sane)
+            if (userUsage[key].history.length < 50) {
+                userUsage[key].history.push({
+                    name: e.name,
+                    type: e.type,
+                    timestamp: e.timestamp,
+                    tokens: e.tokens || 0,
+                    details: e.details
+                });
+            }
+
             // Upgrade status if they logged in later in the stream
             if (e.userId && !userUsage[key].isRegistered) {
                 userUsage[key].isRegistered = true;
@@ -211,19 +232,18 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         const sortedUsers = Object.values(userUsage)
             .map(u => {
                 const sessionCount = u.sessions.size || 1;
-                // Cost Calculation:
-                // Gemini 1.5 Flash is approx $0.35 / 1M input tokens. 
-                // Let's assume a blended rate (input + output) of roughly RM 2.50 per 1M tokens.
                 const cost = (u.tokens / 1000000) * 2.50; 
                 
                 return { 
                     ...u, 
                     sessionCount,
                     avgTokensPerSession: Math.round(u.tokens / sessionCount),
-                    estimatedCost: cost
+                    estimatedCost: cost,
+                    // Sort history by time desc
+                    history: u.history.sort((a: any, b: any) => b.timestamp - a.timestamp)
                 };
             })
-            .sort((a, b) => b.tokens - a.tokens); // Sort by highest token usage first
+            .sort((a, b) => b.lastSeen - a.lastSeen); // Sort by most recently active
 
         const chartData = Object.entries(dailyTraffic).map(([date, count]) => ({ date, count }));
 
