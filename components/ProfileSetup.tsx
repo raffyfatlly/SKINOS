@@ -31,7 +31,6 @@ interface ProfileSetupProps {
   onOpenAdmin?: () => void;
 }
 
-// ... (Rest of the MonthGroup, GoalEditModal, HistoryChart, ScanDetailModal components remain exactly the same)
 // --- SUB-COMPONENT: MONTH GROUP (Expandable) ---
 const MonthGroup: React.FC<{ 
     monthYear: string; 
@@ -661,10 +660,11 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                   {auth && auth.currentUser && (
                       <button 
                         onClick={handleSignOut}
-                        className="p-2 bg-white/20 rounded-full text-white hover:bg-white/30 transition-colors shadow-sm border border-white/20"
+                        className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all backdrop-blur-md border border-white/10 group shadow-sm"
                         title="Sign Out"
                       >
-                          <LogOut size={18} />
+                          <span className="text-[10px] font-bold uppercase tracking-widest opacity-90 group-hover:opacity-100">Sign Out</span>
+                          <LogOut size={14} className="opacity-80 group-hover:opacity-100" />
                       </button>
                   )}
               </div>
