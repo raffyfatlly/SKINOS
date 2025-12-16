@@ -369,12 +369,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                                 <span className="font-bold text-zinc-900 text-xs group-hover:text-indigo-700 transition-colors">
                                                                     {u.identity.length > 20 ? u.identity.substr(0,20) + '...' : u.identity}
                                                                 </span>
-                                                                {/* DARKENED EMAIL TEXT FOR VISIBILITY OR FALLBACK */}
-                                                                {u.email ? (
-                                                                    <span className="text-[10px] text-zinc-500 font-bold block">{u.email}</span>
-                                                                ) : u.isRegistered && (
-                                                                    <span className="text-[9px] text-zinc-300 font-medium italic">Email Hidden</span>
-                                                                )}
+                                                                {/* ROBUST EMAIL DISPLAY */}
+                                                                <span className={`text-[10px] font-bold block ${u.email ? 'text-zinc-500' : 'text-zinc-400 font-mono'}`}>
+                                                                    {u.email || (u.originalUid ? `ID: ${u.originalUid.substring(0,8)}...` : 'Guest')}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     </td>
