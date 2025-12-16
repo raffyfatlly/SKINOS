@@ -46,11 +46,21 @@ export const saveUserData = async (user: UserProfile, shelf: Product[]) => {
     if (auth?.currentUser && db) {
         try {
             const docRef = doc(db, "users", auth.currentUser.uid);
-            // We strip 'isAnonymous' to false when saving to cloud
-            const cloudProfile = { ...user, isAnonymous: false };
+            
+            // CRITICAL FIX: Ensure email is captured from Auth if missing in profile
+            // This ensures Admin Dashboard can read it from Firestore
+            const authEmail = auth.currentUser.email;
+            const finalEmail = user.email || authEmail || undefined;
+            
+            const cloudProfile = { 
+                ...user, 
+                isAnonymous: false,
+                email: finalEmail 
+            };
             
             await setDoc(docRef, {
                 profile: cloudProfile,
+                email: finalEmail, // Explicitly save at root for easy indexing/admin viewing
                 shelf: shelf,
                 lastUpdated: Date.now()
             }, { merge: true });

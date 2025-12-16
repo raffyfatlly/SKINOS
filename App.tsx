@@ -188,7 +188,16 @@ const App: React.FC = () => {
                 
                 if (data.user) {
                     // Scenario A: Existing User (Found in Cloud or Local)
-                    setUserProfile(data.user);
+                    
+                    // SELF-HEALING: Check if email is missing in profile but exists in Auth
+                    // This fixes the "No Email" issue in Admin Dashboard
+                    let loadedUser = data.user;
+                    if (user.email && !loadedUser.email) {
+                        loadedUser = { ...loadedUser, email: user.email };
+                        saveUserData(loadedUser, data.shelf); // Force sync to DB
+                    }
+
+                    setUserProfile(loadedUser);
                     setShelf(data.shelf);
                     
                     // Force navigation if we were in the login flow
