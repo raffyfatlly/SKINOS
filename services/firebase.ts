@@ -122,8 +122,17 @@ export const loginWithEmail = async (email: string, pass: string) => {
 
 export const signInAnonymously = async () => {
     if (!auth) throw new Error("Firebase auth not initialized");
-    const result = await firebaseSignInAnonymously(auth);
-    return result.user;
+    try {
+        const result = await firebaseSignInAnonymously(auth);
+        return result.user;
+    } catch (error: any) {
+        // Gracefully handle if Anonymous Auth is disabled in console
+        if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
+            console.warn("⚠️ Guest Auth disabled in Firebase Console. Running in offline mode.");
+            return null;
+        }
+        throw error;
+    }
 };
 
 export const signOut = async () => {
