@@ -83,11 +83,48 @@ export const estimateTokens = (inputText: string, outputText: string = ''): numb
     return Math.ceil((inputText.length + outputText.length) / 4);
 };
 
+// --- MOCK DATA GENERATOR (Fallback) ---
+export const getMockAnalyticsSummary = () => {
+    const mockUsers = Array.from({ length: 15 }).map((_, i) => ({
+        identity: i % 3 === 0 ? `User_${i}` : `Guest_${Math.random().toString(36).substr(2, 5)}`,
+        isRegistered: i % 3 === 0,
+        email: i % 3 === 0 ? `user${i}@example.com` : undefined,
+        tokens: Math.floor(Math.random() * 50000),
+        sessions: new Set(['s1']),
+        sessionCount: Math.floor(Math.random() * 5) + 1,
+        actions: Math.floor(Math.random() * 20) + 1,
+        lastSeen: Date.now() - Math.floor(Math.random() * 86400000 * 3),
+        estimatedCost: Math.random() * 0.5,
+        history: []
+    }));
+
+    return {
+        totalEvents: 1240,
+        uniqueVisitors: 85,
+        registeredUsers: 24,
+        totalTokens: 450000,
+        estimatedCost: 1.12,
+        topFeatures: [['Face Scan', 150], ['Product Search', 120], ['Routine Builder', 80]],
+        recentLog: Array.from({ length: 10 }).map((_, i) => ({
+            type: ['VIEW', 'ACTION', 'AI_USAGE'][Math.floor(Math.random() * 3)],
+            name: 'Mock_Event_' + i,
+            timestamp: Date.now() - i * 60000,
+            tokens: 100
+        })),
+        userTable: mockUsers,
+        chartData: Array.from({ length: 7 }).map((_, i) => ({
+            date: new Date(Date.now() - (6-i)*86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            count: Math.floor(Math.random() * 200) + 50
+        })),
+        allEvents: []
+    };
+};
+
 // --- ADMIN DASHBOARD DATA FETCHER ---
 export const getAnalyticsSummary = async (days: number = 7) => {
     if (!db) {
         console.error("Cannot fetch analytics: DB not initialized");
-        return null;
+        throw new Error("DB_NOT_INITIALIZED");
     }
 
     const startDate = Date.now() - (days * 24 * 60 * 60 * 1000);
@@ -100,15 +137,25 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             limit(2000) 
         );
         
-        const eventSnapshot = await getDocs(q);
+        let eventSnapshot;
+        try {
+            eventSnapshot = await getDocs(q);
+        } catch (e: any) {
+            if (e.code === 'permission-denied') throw new Error("PERMISSION_DENIED");
+            throw e;
+        }
         
         // 2. Fetch ALL Registered Users (To ensure full list)
-        // This ensures users who haven't logged an event recently still show up.
-        const usersSnapshot = await getDocs(collection(db, 'users'));
+        // Wrapped in try/catch so strict rules on 'users' collection don't crash the whole dashboard
         const registeredUsersMap = new Map<string, any>();
-        usersSnapshot.forEach(doc => {
-            registeredUsersMap.set(doc.id, doc.data());
-        });
+        try {
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            usersSnapshot.forEach(doc => {
+                registeredUsersMap.set(doc.id, doc.data());
+            });
+        } catch (e) {
+            console.warn("Could not fetch full users list (likely permission restricted). Proceeding with analytics-only data.");
+        }
         
         // Initial Defaults
         let totalTokens = 0;
@@ -244,7 +291,7 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         return {
             totalEvents: recentEvents.length,
             uniqueVisitors: uniqueVisitors.size,
-            registeredUsers: registeredUsersMap.size, // Actual DB Count
+            registeredUsers: registeredUsersMap.size > 0 ? registeredUsersMap.size : uniqueVisitors.size,
             totalTokens,
             estimatedCost: (totalTokens / 1000000) * 2.50, 
             topFeatures: Object.entries(featureCounts).sort((a,b) => b[1] - a[1]),
@@ -256,7 +303,7 @@ export const getAnalyticsSummary = async (days: number = 7) => {
 
     } catch (e: any) {
         console.error("Failed to fetch analytics", e);
-        if (e.code === 'permission-denied') {
+        if (e.message === 'PERMISSION_DENIED') {
             throw new Error("PERMISSION_DENIED");
         }
         return null;

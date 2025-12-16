@@ -1,11 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
-import { getAnalyticsSummary } from '../services/analyticsService';
+import { getAnalyticsSummary, getMockAnalyticsSummary } from '../services/analyticsService';
 import { 
   Search, Bell, Settings, Calendar, ChevronDown, MoreHorizontal, 
   ArrowUpRight, Users, Zap, Activity, Clock, CheckCircle2, 
   BarChart3, LayoutGrid, Home, Wallet, FileText, LogOut,
-  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X
+  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X, RotateCw, Eye
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -21,6 +21,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('Week');
+  const [isDemoMode, setIsDemoMode] = useState(false);
   
   // Filter State
   const [showRegisteredOnly, setShowRegisteredOnly] = useState(false);
@@ -28,26 +29,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   // User Drill-down State
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await getAnalyticsSummary(7);
-        if (res) {
-            setData(res);
-        } else {
-            setError("Could not load data. Check console for details.");
-        }
-      } catch (e: any) {
-        if (e.message === 'PERMISSION_DENIED') {
-            setError("PERMISSION_DENIED");
-        } else {
-            setError("An error occurred while fetching analytics.");
-        }
-      } finally {
-        setLoading(false);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getAnalyticsSummary(7);
+      if (res) {
+          setData(res);
+          setIsDemoMode(false);
+      } else {
+          setError("Could not load data. Check console for details.");
       }
-    };
-    load();
+    } catch (e: any) {
+      if (e.message === 'PERMISSION_DENIED') {
+          setError("PERMISSION_DENIED");
+      } else {
+          setError("An error occurred while fetching analytics.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDemoData = () => {
+      setData(getMockAnalyticsSummary());
+      setIsDemoMode(true);
+      setError(null);
+      setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   if (loading) {
@@ -71,7 +83,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                   <h2 className="text-xl font-black text-zinc-900 mb-2">Analytics Error</h2>
                   
                   {error === 'PERMISSION_DENIED' ? (
-                      <div className="text-sm text-zinc-600 mb-6 space-y-2">
+                      <div className="text-sm text-zinc-600 mb-6 space-y-4">
                           <p className="font-bold text-red-600">Database Permission Denied.</p>
                           <p className="text-xs bg-zinc-50 p-3 rounded-lg border border-zinc-100 text-left">
                               1. Go to <strong>Firebase Console</strong> &gt; <strong>Firestore Database</strong><br/>
@@ -86,9 +98,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                       </p>
                   )}
                   
-                  <button onClick={onBack} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold text-sm">
-                      Go Back
-                  </button>
+                  <div className="flex flex-col gap-3">
+                      <div className="flex gap-3">
+                          <button onClick={loadData} className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                              <RotateCw size={16} /> Retry
+                          </button>
+                          <button onClick={loadDemoData} className="flex-1 bg-zinc-100 text-zinc-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
+                              <Eye size={16} /> View Demo
+                          </button>
+                      </div>
+                      <button onClick={onBack} className="text-zinc-400 hover:text-zinc-600 text-xs font-bold uppercase tracking-widest mt-2">
+                          Go Back
+                      </button>
+                  </div>
               </div>
           </div>
       )
@@ -199,7 +221,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             {/* TOP HEADER */}
             <div className="sticky top-0 z-30 bg-[#F4F7FE]/80 backdrop-blur-xl px-8 py-5 flex justify-between items-center">
                 <div>
-                    <p className="text-xs font-bold text-zinc-400 mb-1">System / Analytics</p>
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xs font-bold text-zinc-400">System / Analytics</p>
+                        {isDemoMode && (
+                            <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border border-amber-200">Demo Mode</span>
+                        )}
+                    </div>
                     <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Usage Dashboard</h1>
                 </div>
 
