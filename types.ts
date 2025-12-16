@@ -60,6 +60,7 @@ export interface UserProfile {
   isAnonymous?: boolean; // For lazy signup detection
   preferences?: UserPreferences;
   isPremium?: boolean; // NEW: Tracks payment status
+  email?: string; // Added for Admin detection
 }
 
 export interface IngredientRisk {
@@ -107,4 +108,16 @@ export enum AppView {
   PROFILE_SETUP = 'PROFILE_SETUP',
   BUYING_ASSISTANT = 'BUYING_ASSISTANT',
   ROUTINE_BUILDER = 'ROUTINE_BUILDER', // New view for paid feature
+  ADMIN = 'ADMIN' // New view for analytics
+}
+
+export interface AnalyticsEvent {
+  id?: string;
+  type: 'VIEW' | 'ACTION' | 'AI_USAGE' | 'CONVERSION' | 'ERROR';
+  name: string;
+  visitorId: string;
+  userId?: string;
+  timestamp: number;
+  details?: Record<string, any>;
+  tokens?: number; // Estimated token usage
 }

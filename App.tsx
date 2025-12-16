@@ -8,6 +8,7 @@ import {
   SkinType 
 } from './types';
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
+import { trackEvent } from './services/analyticsService';
 import { auth } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { startCheckout } from './services/stripeService';
@@ -27,9 +28,12 @@ import PremiumRoutineBuilder from './components/PremiumRoutineBuilder';
 import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 import BetaOfferModal from './components/BetaOfferModal';
+import AdminDashboard from './components/AdminDashboard'; // New Import
 
 // Icons
 import { ScanFace, LayoutGrid, User, Search, Home, Loader } from 'lucide-react';
+
+const ADMIN_EMAILS = ['admin@skinos.ai', 'raf@admin.com'];
 
 const App: React.FC = () => {
   // --- STATE ---
@@ -63,6 +67,17 @@ const App: React.FC = () => {
 
   // Update ref whenever view changes
   useEffect(() => { viewRef.current = currentView; }, [currentView]);
+
+  // --- ANALYTICS TRACKING ---
+  // Track Session Start
+  useEffect(() => {
+    trackEvent('VIEW', 'SESSION_START');
+  }, []);
+
+  // Track View Changes
+  useEffect(() => {
+    trackEvent('VIEW', currentView);
+  }, [currentView]);
 
   // --- HELPER: OPEN AUTH MODAL WITH CONTEXT ---
   const openAuth = (trigger: AuthTrigger) => {
@@ -119,6 +134,13 @@ const App: React.FC = () => {
       if (currentUser) {
         setUserProfile(currentUser);
         setShelf(data.shelf);
+        
+        // ADMIN CHECK
+        if (currentUser.email && ADMIN_EMAILS.includes(currentUser.email)) {
+            setCurrentView(AppView.ADMIN);
+            return;
+        }
+
         if (currentUser.hasScannedFace) {
             // If payment just happened, go to Dashboard or Routine
             setCurrentView(isPaymentSuccess ? AppView.DASHBOARD : AppView.DASHBOARD);
@@ -143,6 +165,25 @@ const App: React.FC = () => {
 
             try {
                 await syncLocalToCloud();
+                
+                // ADMIN REDIRECT ON LOGIN
+                if (user.email && ADMIN_EMAILS.includes(user.email)) {
+                    // Create minimal admin profile if not exists
+                    setUserProfile({
+                        name: 'Admin',
+                        age: 99,
+                        skinType: SkinType.NORMAL,
+                        hasScannedFace: true,
+                        biometrics: {} as any,
+                        isAnonymous: false,
+                        email: user.email || undefined
+                    });
+                    setCurrentView(AppView.ADMIN);
+                    setIsGlobalLoading(false);
+                    setShowSaveModal(false);
+                    return;
+                }
+
                 const data = await loadUserData();
                 
                 if (data.user) {
@@ -192,10 +233,12 @@ const App: React.FC = () => {
           hasScannedFace: false,
           biometrics: {} as any, 
           isAnonymous: !isAuth, // If logged in, they are NOT anonymous
-          isPremium: false // Default to false
+          isPremium: false, // Default to false
+          email: auth?.currentUser?.email || undefined
       };
       
       setUserProfile(newUser);
+      trackEvent('CONVERSION', 'SIGNUP_COMPLETE');
       
       // If authenticated, save to cloud immediately to link profile to account
       if (isAuth) {
@@ -232,6 +275,7 @@ const App: React.FC = () => {
   // Called by Buying Assistant to confirm adding to shelf
   const handleAddToShelf = () => {
       if (!userProfile || !analyzedProduct) return;
+      trackEvent('ACTION', 'ADD_TO_SHELF', { productId: analyzedProduct.id, name: analyzedProduct.name });
       const newShelf = [...shelf, analyzedProduct];
       persistState(userProfile, newShelf);
       setAnalyzedProduct(null);
@@ -287,7 +331,8 @@ const App: React.FC = () => {
   // --- RENDER HELPERS ---
   const renderNavBar = () => {
       if (isGlobalLoading) return null; // Hide nav during loading
-      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH, AppView.BUYING_ASSISTANT, AppView.ROUTINE_BUILDER].includes(currentView)) return null;
+      // Hide nav on Admin page
+      if ([AppView.LANDING, AppView.ONBOARDING, AppView.FACE_SCANNER, AppView.PRODUCT_SCANNER, AppView.PRODUCT_SEARCH, AppView.BUYING_ASSISTANT, AppView.ROUTINE_BUILDER, AppView.ADMIN].includes(currentView)) return null;
 
       const navItemClass = (view: AppView) => 
         `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 ${currentView === view ? 'text-teal-600 bg-teal-50 scale-105' : 'text-zinc-400 hover:text-zinc-600'}`;
@@ -434,6 +479,9 @@ const App: React.FC = () => {
                     onLoginRequired={(reason) => openAuth(reason as AuthTrigger)}
                   />
               ) : null;
+
+          case AppView.ADMIN:
+              return <AdminDashboard onBack={() => setCurrentView(AppView.DASHBOARD)} />;
 
           default:
               return null;

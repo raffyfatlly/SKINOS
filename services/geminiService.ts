@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import { SkinMetrics, Product, UserProfile, IngredientRisk, Benefit } from '../types';
+import { trackEvent, estimateTokens } from './analyticsService';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -41,6 +42,7 @@ const runWithRetry = async <T>(fn: (ai: GoogleGenAI) => Promise<T>, fallback: T,
         return await Promise.race([fn(ai), timeoutPromise]);
     } catch (e) {
         console.error("Gemini Error:", e);
+        trackEvent('ERROR', 'GEMINI_FAILURE', { error: String(e) });
         return fallback;
     }
 };
@@ -96,6 +98,9 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
             config: { responseMimeType: 'application/json' }
         });
         
+        const tokens = estimateTokens(prompt, response.text || '');
+        trackEvent('AI_USAGE', 'SEARCH_PRODUCTS', { query, tokens });
+
         const res = parseJSONFromText(response.text || "[]");
         return Array.isArray(res) ? res : [res].filter(x => x.name);
     }, [{ name: query, brand: "Generic" }]);
@@ -129,6 +134,9 @@ export const analyzeFaceSkin = async (image: string, localMetrics: SkinMetrics, 
             config: { responseMimeType: 'application/json' }
         });
         
+        const tokens = estimateTokens(prompt, response.text || '') + 258; // Image token overhead
+        trackEvent('AI_USAGE', 'FACE_ANALYSIS', { tokens });
+
         const data = parseJSONFromText(response.text || "{}");
         return { ...localMetrics, ...data, timestamp: Date.now() };
     }, localMetrics);
@@ -178,6 +186,9 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
                  responseMimeType: 'application/json'
             }
         });
+
+        const tokens = estimateTokens(prompt, response.text || '');
+        trackEvent('AI_USAGE', 'PRODUCT_ANALYSIS_TEXT', { productName, tokens });
 
         const data = parseJSONFromText(response.text || "{}");
 
@@ -251,6 +262,7 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
             config: { responseMimeType: 'application/json' }
         });
 
+        const visionTokens = estimateTokens(visionPrompt, visionResponse.text || '') + 258;
         const visionData = parseJSONFromText(visionResponse.text || "{}");
 
         if (!visionData.name || visionData.name === "Unknown") {
@@ -304,6 +316,9 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
             contents: refinementPrompt,
             config: { responseMimeType: 'application/json' }
         });
+
+        const refineTokens = estimateTokens(refinementPrompt, finalResponse.text || '');
+        trackEvent('AI_USAGE', 'PRODUCT_ANALYSIS_VISION', { tokens: visionTokens + refineTokens });
 
         const data = parseJSONFromText(finalResponse.text || "{}");
         
@@ -435,6 +450,7 @@ export const getClinicalTreatmentSuggestions = (user: UserProfile) => {
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
+    trackEvent('ACTION', 'CHAT_SESSION_START', { shelfSize: shelf.length });
     return ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {
@@ -532,6 +548,9 @@ export const generateRoutineRecommendations = async (user: UserProfile): Promise
             contents: prompt,
             config: { responseMimeType: 'application/json' }
         });
+        
+        const tokens = estimateTokens(prompt, response.text || '');
+        trackEvent('AI_USAGE', 'ROUTINE_BUILD', { tokens });
 
         return parseJSONFromText(response.text || "{}");
     }, null, 60000);
