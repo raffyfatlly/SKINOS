@@ -16,6 +16,21 @@ interface AdminDashboardProps {
 const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (ts: number) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
+// FORMATTER FOR EVENT NAMES
+const formatEventName = (name: string) => {
+    switch (name) {
+        case 'AI_DERM_CONSULT': return 'AI Consultation';
+        case 'CHAT_SESSION_START': return 'AI Consultation'; // Legacy mapping
+        case 'FACE_ANALYSIS': return 'Face Scan Analysis';
+        case 'PRODUCT_ANALYSIS_VISION': return 'Product Scan';
+        case 'PRODUCT_ANALYSIS_TEXT': return 'Product Search';
+        case 'ROUTINE_BUILD': return 'Routine Builder';
+        case 'ADD_TO_SHELF': return 'Shelf Add';
+        case 'SIGNUP_COMPLETE': return 'New Registration';
+        default: return name.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+};
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -354,7 +369,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                                 <span className="font-bold text-zinc-900 text-xs group-hover:text-indigo-700 transition-colors">
                                                                     {u.identity.length > 20 ? u.identity.substr(0,20) + '...' : u.identity}
                                                                 </span>
-                                                                {u.email && <span className="text-[10px] text-zinc-400 font-medium">{u.email}</span>}
+                                                                {/* DARKENED EMAIL TEXT FOR VISIBILITY OR FALLBACK */}
+                                                                {u.email ? (
+                                                                    <span className="text-[10px] text-zinc-500 font-bold block">{u.email}</span>
+                                                                ) : u.isRegistered && (
+                                                                    <span className="text-[9px] text-zinc-300 font-medium italic">Email Hidden</span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -408,7 +428,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <div className="flex-1 min-w-0 pt-1 pb-2 border-b border-zinc-50 group-last:border-0">
                                             <div className="flex justify-between items-start">
                                                 <h5 className="text-xs font-bold text-zinc-800 leading-tight truncate pr-2 group-hover:text-indigo-600 transition-colors">
-                                                    {log.name.replace(/_/g, ' ')}
+                                                    {formatEventName(log.name)}
                                                 </h5>
                                                 <span className="text-[9px] font-bold text-zinc-400 whitespace-nowrap">{formatTime(log.timestamp)}</span>
                                             </div>
@@ -513,7 +533,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white shadow-sm transition-transform group-hover:scale-125 ${event.type === 'AI_USAGE' ? 'bg-amber-400' : event.type === 'CONVERSION' ? 'bg-emerald-500' : 'bg-indigo-400'}`}></div>
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <span className="text-sm font-bold text-zinc-900 block group-hover:text-indigo-600 transition-colors">{event.name.replace(/_/g, ' ')}</span>
+                                                <span className="text-sm font-bold text-zinc-900 block group-hover:text-indigo-600 transition-colors">{formatEventName(event.name)}</span>
                                                 <span className="text-[10px] text-zinc-400 font-medium">{formatDate(event.timestamp)} at {formatTime(event.timestamp)}</span>
                                             </div>
                                             {event.tokens > 0 && (

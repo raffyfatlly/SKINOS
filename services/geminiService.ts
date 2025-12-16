@@ -450,7 +450,8 @@ export const getClinicalTreatmentSuggestions = (user: UserProfile) => {
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
-    trackEvent('ACTION', 'CHAT_SESSION_START', { shelfSize: shelf.length });
+    // UPDATED: CHANGED EVENT NAME TO BE MORE CLINICAL
+    trackEvent('ACTION', 'AI_DERM_CONSULT', { shelfSize: shelf.length });
     return ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {

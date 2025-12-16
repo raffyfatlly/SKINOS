@@ -239,13 +239,25 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         registeredUsersMap.forEach((userData, uid) => {
             const profile = userData.profile || {};
             const displayName = profile.name || uid;
-            const email = profile.email || "No Email";
+            
+            // ROBUST EMAIL EXTRACTION
+            // 1. Try profile.email
+            // 2. Try userData.email (sometimes saved at root)
+            // 3. Fallback
+            let email = profile.email || userData.email;
+            
+            if (!email) {
+                // Last resort: If we don't have email but have name, check if name looks like email
+                if (displayName && displayName.includes('@')) {
+                    email = displayName;
+                }
+            }
 
             if (userUsage[uid]) {
                 // User exists in event logs -> Update details
                 userUsage[uid].isRegistered = true;
                 userUsage[uid].identity = displayName;
-                userUsage[uid].email = email;
+                if (email) userUsage[uid].email = email;
                 userUsage[uid].originalUid = uid;
             } else {
                 // User exists in DB but NO recent events -> Add them manually
