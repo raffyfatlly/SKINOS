@@ -477,6 +477,9 @@ const App: React.FC = () => {
                     onBack={() => setCurrentView(AppView.DASHBOARD)}
                     onReset={handleResetApp}
                     onLoginRequired={(reason) => openAuth(reason as AuthTrigger)}
+                    // Pass Admin Props
+                    isAdmin={userProfile.email && ADMIN_EMAILS.includes(userProfile.email)}
+                    onOpenAdmin={() => setCurrentView(AppView.ADMIN)}
                   />
               ) : null;
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { UserProfile, UserPreferences, SkinMetrics, Product } from '../types';
-import { ArrowLeft, Check, Sparkles, Target, Zap, Activity, TrendingUp, LineChart, X, Trash2, Settings2, ChevronDown, ChevronRight, Minus, Trophy, LogOut, AlertCircle, Clock, Calendar, Edit2 } from 'lucide-react';
+import { ArrowLeft, Check, Sparkles, Target, Zap, Activity, TrendingUp, LineChart, X, Trash2, Settings2, ChevronDown, ChevronRight, Minus, Trophy, LogOut, AlertCircle, Clock, Calendar, Edit2, Database } from 'lucide-react';
 import { signOut, auth } from '../services/firebase';
 
 // Helper to parse markdown-style bolding from AI response
@@ -27,8 +27,11 @@ interface ProfileSetupProps {
   onBack: () => void;
   onReset: () => void;
   onLoginRequired: (trigger: string) => void;
+  isAdmin?: boolean | null;
+  onOpenAdmin?: () => void;
 }
 
+// ... (Rest of the MonthGroup, GoalEditModal, HistoryChart, ScanDetailModal components remain exactly the same)
 // --- SUB-COMPONENT: MONTH GROUP (Expandable) ---
 const MonthGroup: React.FC<{ 
     monthYear: string; 
@@ -433,7 +436,7 @@ const ScanDetailModal: React.FC<{ scan: SkinMetrics; onClose: () => void }> = ({
     );
 };
 
-const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplete, onBack, onReset, onLoginRequired }) => {
+const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplete, onBack, onReset, onLoginRequired, isAdmin, onOpenAdmin }) => {
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [selectedScan, setSelectedScan] = useState<SkinMetrics | null>(null);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -707,7 +710,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
                                      <Edit2 size={14} />
                                  </button>
                              </div>
-                             {/* HIDE Unknown Skin Text Logic */}
                              <p className="text-sm font-bold text-white mt-1 drop-shadow-sm opacity-95">
                                  {user.age} Years{user.skinType !== 'UNKNOWN' ? ` • ${user.skinType.charAt(0) + user.skinType.slice(1).toLowerCase()} Skin` : ''}
                              </p>
@@ -883,7 +885,17 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ user, shelf = [], onComplet
           </section>
 
           {/* DANGER ZONE */}
-          <div className="mt-12 text-center pb-8">
+          <div className="mt-12 text-center pb-8 space-y-6">
+               {/* ADMIN BUTTON */}
+               {isAdmin && onOpenAdmin && (
+                   <button
+                       onClick={onOpenAdmin}
+                       className="w-full py-4 rounded-[1.5rem] bg-slate-800 text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20"
+                   >
+                       <Database size={16} /> Open Admin Dashboard
+                   </button>
+               )}
+
                <button 
                   onClick={() => {
                       if (user.isAnonymous) {

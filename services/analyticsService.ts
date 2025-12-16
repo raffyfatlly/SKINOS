@@ -58,13 +58,13 @@ export const getAnalyticsSummary = async (days: number = 7) => {
     const startDate = Date.now() - (days * 24 * 60 * 60 * 1000);
     
     // In a real production app with millions of records, you'd use Aggregate Queries 
-    // or BigQuery. For this scale, client-side aggregation of the last 1000 events is fine.
+    // or BigQuery. For this scale, client-side aggregation of the last 2000 events is fine for MVP.
     
     try {
         const q = query(
             collection(db, COLLECTION_NAME), 
             orderBy('timestamp', 'desc'), 
-            limit(1000) // Safety limit
+            limit(2000) 
         );
         
         const snapshot = await getDocs(q);
@@ -79,7 +79,16 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         
         let totalTokens = 0;
         let featureCounts: Record<string, number> = {};
-        let visitorUsage: Record<string, { tokens: number, lastSeen: number, isUser: boolean, actions: number }> = {};
+        let dailyTraffic: Record<string, number> = {};
+        
+        let visitorUsage: Record<string, { 
+            tokens: number, 
+            lastSeen: number, 
+            isUser: boolean, 
+            actions: number,
+            userId?: string,
+            firstSeen: number
+        }> = {};
 
         recentEvents.forEach(e => {
             // Token Sum
@@ -90,30 +99,55 @@ export const getAnalyticsSummary = async (days: number = 7) => {
                 featureCounts[e.name] = (featureCounts[e.name] || 0) + 1;
             }
 
+            // Daily Stats for Chart
+            const dateKey = new Date(e.timestamp).toLocaleDateString();
+            dailyTraffic[dateKey] = (dailyTraffic[dateKey] || 0) + 1;
+
             // User Profiling
             const vid = e.visitorId;
             if (!visitorUsage[vid]) {
-                visitorUsage[vid] = { tokens: 0, lastSeen: 0, isUser: !!e.userId, actions: 0 };
+                visitorUsage[vid] = { 
+                    tokens: 0, 
+                    lastSeen: 0, 
+                    isUser: !!e.userId, 
+                    actions: 0,
+                    userId: e.userId,
+                    firstSeen: e.timestamp
+                };
             }
+            
             visitorUsage[vid].tokens += (e.tokens || 0);
             visitorUsage[vid].actions += 1;
+            
+            // Update timestamps
             if (e.timestamp > visitorUsage[vid].lastSeen) visitorUsage[vid].lastSeen = e.timestamp;
-            if (e.userId) visitorUsage[vid].isUser = true;
+            if (e.timestamp < visitorUsage[vid].firstSeen) visitorUsage[vid].firstSeen = e.timestamp;
+            
+            // Update User Status if they logged in later in the stream
+            if (e.userId && !visitorUsage[vid].isUser) {
+                visitorUsage[vid].isUser = true;
+                visitorUsage[vid].userId = e.userId;
+            }
         });
 
         const sortedUsers = Object.entries(visitorUsage)
             .map(([vid, data]) => ({ vid, ...data }))
             .sort((a, b) => b.lastSeen - a.lastSeen);
 
+        const chartData = Object.entries(dailyTraffic).map(([date, count]) => ({ date, count }));
+
         return {
             totalEvents: recentEvents.length,
             uniqueVisitors: uniqueVisitors.size,
             registeredUsers: uniqueUsers.size,
             totalTokens,
-            estimatedCost: (totalTokens / 1000000) * 0.50, // Approx $0.50 per 1M tokens (blended rate)
+            // COST IN RM: Approx RM 2.50 per 1M tokens (Blended rate for Gemini Flash/Pro)
+            estimatedCost: (totalTokens / 1000000) * 2.50, 
             topFeatures: Object.entries(featureCounts).sort((a,b) => b[1] - a[1]),
-            recentLog: recentEvents.slice(0, 20),
-            userTable: sortedUsers
+            recentLog: recentEvents.slice(0, 50),
+            userTable: sortedUsers,
+            chartData: chartData,
+            allEvents: recentEvents // Return all for client-side drill-down
         };
 
     } catch (e) {
