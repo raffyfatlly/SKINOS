@@ -1,12 +1,15 @@
 
-import { collection, addDoc, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { db, auth } from './firebase';
 import { AnalyticsEvent } from '../types';
 
 const COLLECTION_NAME = 'analytics_events';
 const VISITOR_KEY = 'skinos_visitor_id';
+const SESSION_KEY = 'skinos_session_id';
 
-// --- VISITOR IDENTIFICATION ---
+// --- IDENTITY MANAGEMENT ---
+
+// 1. Visitor ID (Persistent Device ID)
 export const getVisitorId = (): string => {
     let vid = localStorage.getItem(VISITOR_KEY);
     if (!vid) {
@@ -16,32 +19,57 @@ export const getVisitorId = (): string => {
     return vid;
 };
 
+// 2. Session ID (Ephemeral, resets on tab close/new visit)
+export const getSessionId = (): string => {
+    let sid = sessionStorage.getItem(SESSION_KEY);
+    if (!sid) {
+        sid = 's_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        sessionStorage.setItem(SESSION_KEY, sid);
+    }
+    return sid;
+};
+
 // --- CORE TRACKING ---
 export const trackEvent = async (
     type: AnalyticsEvent['type'], 
     name: string, 
     details: Record<string, any> = {}, 
-    userId?: string
+    explicitUserId?: string
 ) => {
-    const event: AnalyticsEvent = {
+    // Auto-detect User ID from Firebase Auth if not explicitly passed
+    const finalUserId = explicitUserId || auth?.currentUser?.uid || undefined;
+    const visitorId = getVisitorId();
+    const sessionId = getSessionId();
+
+    const event: AnalyticsEvent & { sessionId: string } = {
         type,
         name,
-        visitorId: getVisitorId(),
-        userId: userId || undefined,
+        visitorId,
+        sessionId,
+        userId: finalUserId,
         timestamp: Date.now(),
         details,
         tokens: details.tokens || 0
     };
 
-    console.log(`[Analytics] ${type}: ${name}`, event);
+    // Console Log for Devs
+    console.log(`[Analytics] ${type}: ${name} | Tokens: ${event.tokens} | User: ${finalUserId || 'Guest'}`);
 
     if (db) {
         try {
             await addDoc(collection(db, COLLECTION_NAME), event);
-        } catch (e) {
-            // Silently fail in production to not block UI, log in dev
-            console.warn("Analytics push failed", e);
+        } catch (e: any) {
+            // Detailed Error Handling for Database Setup
+            if (e.code === 'permission-denied') {
+                console.error("Analytics Error: Permission Denied. Go to Firebase Console > Firestore > Rules and allow 'create' on 'analytics_events'.");
+            } else if (e.code === 'unavailable' || e.code === 'not-found') {
+                console.warn("Analytics Error: Firestore not created. Go to Firebase Console > Build > Firestore Database > Create Database.");
+            } else {
+                console.warn("Analytics push failed", e);
+            }
         }
+    } else {
+        console.debug("Analytics skipped: Firebase DB not initialized.");
     }
 };
 
@@ -53,12 +81,12 @@ export const estimateTokens = (inputText: string, outputText: string = ''): numb
 
 // --- ADMIN DASHBOARD DATA FETCHER ---
 export const getAnalyticsSummary = async (days: number = 7) => {
-    if (!db) return null;
+    if (!db) {
+        console.error("Cannot fetch analytics: DB not initialized");
+        return null;
+    }
 
     const startDate = Date.now() - (days * 24 * 60 * 60 * 1000);
-    
-    // In a real production app with millions of records, you'd use Aggregate Queries 
-    // or BigQuery. For this scale, client-side aggregation of the last 2000 events is fine for MVP.
     
     try {
         const q = query(
@@ -68,7 +96,23 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         );
         
         const snapshot = await getDocs(q);
-        const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsEvent));
+        
+        if (snapshot.empty) {
+            return {
+                totalEvents: 0,
+                uniqueVisitors: 0,
+                registeredUsers: 0,
+                totalTokens: 0,
+                estimatedCost: 0,
+                topFeatures: [],
+                recentLog: [],
+                userTable: [],
+                chartData: [],
+                allEvents: []
+            };
+        }
+
+        const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsEvent & { sessionId?: string }));
         
         // Filter by date range
         const recentEvents = events.filter(e => e.timestamp > startDate);
@@ -81,13 +125,17 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         let featureCounts: Record<string, number> = {};
         let dailyTraffic: Record<string, number> = {};
         
-        let visitorUsage: Record<string, { 
+        // Enhanced User Tracking (aggregates by User OR Visitor ID)
+        // Key = UserID (if exists) OR VisitorID
+        let userUsage: Record<string, { 
+            identity: string,
+            isRegistered: boolean,
             tokens: number, 
+            sessions: Set<string>,
             lastSeen: number, 
-            isUser: boolean, 
             actions: number,
-            userId?: string,
-            firstSeen: number
+            lastAction: string,
+            email?: string
         }> = {};
 
         recentEvents.forEach(e => {
@@ -100,39 +148,59 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             }
 
             // Daily Stats for Chart
-            const dateKey = new Date(e.timestamp).toLocaleDateString();
+            const dateKey = new Date(e.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             dailyTraffic[dateKey] = (dailyTraffic[dateKey] || 0) + 1;
 
             // User Profiling
-            const vid = e.visitorId;
-            if (!visitorUsage[vid]) {
-                visitorUsage[vid] = { 
+            // If logged in, prioritize UserID as key. If guest, use VisitorID.
+            // Note: In a real app, you might want to merge Visitor data into User data upon login. 
+            // Here we treat them based on the event's context.
+            const key = e.userId || e.visitorId;
+            
+            if (!userUsage[key]) {
+                userUsage[key] = { 
+                    identity: key,
+                    isRegistered: !!e.userId,
                     tokens: 0, 
+                    sessions: new Set(),
                     lastSeen: 0, 
-                    isUser: !!e.userId, 
                     actions: 0,
-                    userId: e.userId,
-                    firstSeen: e.timestamp
+                    lastAction: ''
                 };
             }
             
-            visitorUsage[vid].tokens += (e.tokens || 0);
-            visitorUsage[vid].actions += 1;
+            userUsage[key].tokens += (e.tokens || 0);
+            userUsage[key].actions += 1;
+            userUsage[key].lastAction = e.name;
+            if (e.sessionId) userUsage[key].sessions.add(e.sessionId);
             
             // Update timestamps
-            if (e.timestamp > visitorUsage[vid].lastSeen) visitorUsage[vid].lastSeen = e.timestamp;
-            if (e.timestamp < visitorUsage[vid].firstSeen) visitorUsage[vid].firstSeen = e.timestamp;
+            if (e.timestamp > userUsage[key].lastSeen) userUsage[key].lastSeen = e.timestamp;
             
-            // Update User Status if they logged in later in the stream
-            if (e.userId && !visitorUsage[vid].isUser) {
-                visitorUsage[vid].isUser = true;
-                visitorUsage[vid].userId = e.userId;
+            // Upgrade status if they logged in later in the stream
+            if (e.userId && !userUsage[key].isRegistered) {
+                userUsage[key].isRegistered = true;
+                userUsage[key].identity = e.userId; 
             }
         });
 
-        const sortedUsers = Object.entries(visitorUsage)
-            .map(([vid, data]) => ({ vid, ...data }))
-            .sort((a, b) => b.lastSeen - a.lastSeen);
+        // Convert Map to Array & Calculate Derived Metrics
+        const sortedUsers = Object.values(userUsage)
+            .map(u => {
+                const sessionCount = u.sessions.size || 1;
+                // Cost Calculation:
+                // Gemini 1.5 Flash is approx $0.35 / 1M input tokens. 
+                // Let's assume a blended rate (input + output) of roughly RM 2.50 per 1M tokens.
+                const cost = (u.tokens / 1000000) * 2.50; 
+                
+                return { 
+                    ...u, 
+                    sessionCount,
+                    avgTokensPerSession: Math.round(u.tokens / sessionCount),
+                    estimatedCost: cost
+                };
+            })
+            .sort((a, b) => b.tokens - a.tokens); // Sort by highest token usage first
 
         const chartData = Object.entries(dailyTraffic).map(([date, count]) => ({ date, count }));
 
@@ -141,17 +209,19 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             uniqueVisitors: uniqueVisitors.size,
             registeredUsers: uniqueUsers.size,
             totalTokens,
-            // COST IN RM: Approx RM 2.50 per 1M tokens (Blended rate for Gemini Flash/Pro)
             estimatedCost: (totalTokens / 1000000) * 2.50, 
             topFeatures: Object.entries(featureCounts).sort((a,b) => b[1] - a[1]),
             recentLog: recentEvents.slice(0, 50),
             userTable: sortedUsers,
             chartData: chartData,
-            allEvents: recentEvents // Return all for client-side drill-down
+            allEvents: recentEvents 
         };
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Failed to fetch analytics", e);
+        if (e.code === 'permission-denied') {
+            throw new Error("PERMISSION_DENIED");
+        }
         return null;
     }
 };

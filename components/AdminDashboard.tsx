@@ -5,7 +5,7 @@ import {
   Search, Bell, Settings, Calendar, ChevronDown, MoreHorizontal, 
   ArrowUpRight, Users, Zap, Activity, Clock, CheckCircle2, 
   BarChart3, LayoutGrid, Home, Wallet, FileText, LogOut,
-  Smartphone, Monitor, Shield
+  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -15,14 +15,27 @@ interface AdminDashboardProps {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('Week');
 
   useEffect(() => {
     const load = async () => {
-      // Fetch 7 days of data
-      const res = await getAnalyticsSummary(7);
-      setData(res);
-      setLoading(false);
+      try {
+        const res = await getAnalyticsSummary(7);
+        if (res) {
+            setData(res);
+        } else {
+            setError("Could not load data. Check console for details.");
+        }
+      } catch (e: any) {
+        if (e.message === 'PERMISSION_DENIED') {
+            setError("PERMISSION_DENIED");
+        } else {
+            setError("An error occurred while fetching analytics.");
+        }
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, []);
@@ -32,13 +45,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
       <div className="min-h-screen bg-[#F4F7FE] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
             <div className="animate-spin w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
-            <p className="text-indigo-900/50 font-bold text-xs uppercase tracking-widest">Loading Live Data...</p>
+            <p className="text-indigo-900/50 font-bold text-xs uppercase tracking-widest">Crunching Usage Data...</p>
         </div>
       </div>
     );
   }
 
-  // --- SUB-COMPONENTS ---
+  if (error || !data) {
+      return (
+          <div className="min-h-screen bg-[#F4F7FE] flex items-center justify-center p-6">
+              <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md text-center border border-red-100">
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                      <AlertTriangle size={32} />
+                  </div>
+                  <h2 className="text-xl font-black text-zinc-900 mb-2">Analytics Error</h2>
+                  
+                  {error === 'PERMISSION_DENIED' ? (
+                      <div className="text-sm text-zinc-600 mb-6 space-y-2">
+                          <p className="font-bold text-red-600">Database Permission Denied.</p>
+                          <p className="text-xs bg-zinc-50 p-3 rounded-lg border border-zinc-100 text-left">
+                              1. Go to <strong>Firebase Console</strong> &gt; <strong>Firestore Database</strong><br/>
+                              2. Click <strong>Rules</strong> tab.<br/>
+                              3. Set rules to allow read/write for <code>analytics_events</code>.<br/>
+                              4. Ensure the database is actually created!
+                          </p>
+                      </div>
+                  ) : (
+                      <p className="text-sm text-zinc-600 mb-6">
+                          {error || "No data returned. Ensure Firestore is created and initialized."}
+                      </p>
+                  )}
+                  
+                  <button onClick={onBack} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold text-sm">
+                      Go Back
+                  </button>
+              </div>
+          </div>
+      )
+  }
 
   const SidebarItem = ({ icon: Icon, label, active = false }: any) => (
       <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all cursor-pointer ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-zinc-400 hover:text-indigo-600 hover:bg-white'}`}>
@@ -60,21 +104,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
       </div>
   );
 
-  // Custom Bar Chart to match reference "Income Tracker"
   const TrafficChart = () => {
-      // Map analytics data to chart bars. If no data, show placeholders.
       const chartData = data?.chartData || [];
-      // Fill to 7 days if needed
       const displayData = Array.from({ length: 7 }).map((_, i) => {
-          const dayData = chartData[i] || { date: 'Day', count: Math.floor(Math.random() * 50) + 10 };
+          const dayData = chartData[i] || { date: 'Day', count: 0 };
           return {
-              label: new Date(dayData.date).toLocaleDateString('en-US', { weekday: 'narrow' }),
+              label: dayData.date === 'Day' ? `Day ${i+1}` : dayData.date,
               value: dayData.count,
-              active: i === chartData.length - 1 // Highlight today
+              active: i === chartData.length - 1 
           };
       });
 
-      const maxVal = Math.max(...displayData.map(d => d.value)) || 100;
+      const maxVal = Math.max(...displayData.map(d => d.value)) || 10; 
 
       return (
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-zinc-50 h-full flex flex-col">
@@ -94,30 +135,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
               </div>
 
               <div className="flex-1 flex items-end justify-between gap-2 sm:gap-6 relative">
-                  {/* Total Overlay */}
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
                       <span className="text-3xl font-black text-zinc-900 block">{data.totalEvents}</span>
-                      <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wide">+20% vs last week</span>
+                      <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wide">Total Events</span>
                   </div>
 
                   {displayData.map((d, i) => (
                       <div key={i} className="flex flex-col items-center gap-3 flex-1 group cursor-pointer">
-                          {/* Tooltip Value */}
                           <div className={`text-xs font-bold transition-all duration-300 ${d.active ? 'text-indigo-600 -translate-y-1' : 'text-zinc-300 opacity-0 group-hover:opacity-100 group-hover:-translate-y-1'}`}>
                               {d.value}
                           </div>
-                          
-                          {/* Bar Track */}
                           <div className="w-full bg-zinc-50 rounded-2xl h-48 flex items-end p-1 relative overflow-hidden">
-                              {/* Bar Fill */}
                               <div 
                                 className={`w-full rounded-xl transition-all duration-1000 ease-out relative ${d.active ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-indigo-200 group-hover:bg-indigo-300'}`}
                                 style={{ height: `${(d.value / maxVal) * 100}%` }}
-                              >
-                                  {d.active && (
-                                      <div className="absolute top-0 left-0 right-0 h-1 bg-white/30 rounded-t-xl"></div>
-                                  )}
-                              </div>
+                              ></div>
                           </div>
                           <span className={`text-xs font-bold uppercase ${d.active ? 'text-indigo-600' : 'text-zinc-400'}`}>{d.label}</span>
                       </div>
@@ -134,31 +166,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         <div className="w-64 bg-white hidden lg:flex flex-col border-r border-zinc-100">
             <div className="p-8 flex items-center gap-3">
                 <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-                    <Activity size={20} strokeWidth={3} />
+                    <Database size={20} strokeWidth={3} />
                 </div>
-                <span className="text-xl font-black text-zinc-900 tracking-tight">SkinOS</span>
+                <span className="text-xl font-black text-zinc-900 tracking-tight">Admin</span>
             </div>
 
             <div className="px-4 space-y-2 flex-1">
-                <SidebarItem icon={Home} label="Dashboard" active />
-                <SidebarItem icon={BarChart3} label="Analytics" />
-                <SidebarItem icon={Wallet} label="Revenue" />
-                <SidebarItem icon={LayoutGrid} label="Products" />
-                <SidebarItem icon={Users} label="Customers" />
-                <div className="my-6 border-t border-zinc-100 mx-4"></div>
-                <SidebarItem icon={Settings} label="Settings" />
-            </div>
-
-            <div className="p-6">
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-10 -mt-10 blur-xl"></div>
-                    <div className="w-8 h-8 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center mb-3">
-                        <Zap size={16} fill="currentColor" className="text-yellow-300" />
-                    </div>
-                    <h4 className="font-bold text-sm mb-1">Upgrade Plan</h4>
-                    <p className="text-[10px] opacity-80 mb-3 leading-relaxed">Unlock advanced AI analysis features.</p>
-                    <button className="text-[10px] font-bold bg-white text-indigo-600 px-3 py-2 rounded-lg w-full">View Offers</button>
-                </div>
+                <SidebarItem icon={Home} label="Overview" active />
+                <SidebarItem icon={Users} label="User Usage" />
+                <SidebarItem icon={Zap} label="API Cost" />
+                <SidebarItem icon={Settings} label="Config" />
             </div>
         </div>
 
@@ -168,19 +185,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             {/* TOP HEADER */}
             <div className="sticky top-0 z-30 bg-[#F4F7FE]/80 backdrop-blur-xl px-8 py-5 flex justify-between items-center">
                 <div>
-                    <p className="text-xs font-bold text-zinc-400 mb-1">Pages / Dashboard</p>
-                    <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Main Dashboard</h1>
+                    <p className="text-xs font-bold text-zinc-400 mb-1">System / Analytics</p>
+                    <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Usage Dashboard</h1>
                 </div>
 
                 <div className="bg-white p-2 rounded-full shadow-sm border border-white flex items-center gap-4 pl-4">
-                    <div className="flex items-center gap-2 bg-zinc-50 px-3 py-2 rounded-full text-zinc-400">
-                        <Search size={14} />
-                        <input placeholder="Search..." className="bg-transparent border-none outline-none text-xs font-bold w-24 sm:w-48 text-zinc-600 placeholder:text-zinc-300" />
-                    </div>
-                    <button className="text-zinc-400 hover:text-indigo-600 transition-colors relative">
-                        <Bell size={18} />
-                        <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-                    </button>
                     <button onClick={onBack} className="text-zinc-400 hover:text-rose-600 transition-colors" title="Exit">
                         <LogOut size={18} />
                     </button>
@@ -194,10 +203,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                 
                 {/* 1. STATS ROW */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatWidget icon={Activity} label="Est. Cost" value={`RM ${data.estimatedCost.toFixed(2)}`} color="bg-indigo-50 text-indigo-600" sub="Since last invoice" />
-                    <StatWidget icon={Zap} label="Token Usage" value={(data.totalTokens / 1000).toFixed(1) + 'k'} color="bg-amber-50 text-amber-500" sub="Gemini 2.5 Flash" />
-                    <StatWidget icon={Users} label="Total Visitors" value={data.uniqueVisitors} color="bg-emerald-50 text-emerald-600" sub="+12% this month" />
-                    <StatWidget icon={FileText} label="Scans Run" value={data.totalEvents} color="bg-rose-50 text-rose-600" sub="Analyzing..." />
+                    <StatWidget icon={Activity} label="Est. Cost" value={`RM ${data.estimatedCost.toFixed(2)}`} color="bg-indigo-50 text-indigo-600" sub="Gemini API Cost" />
+                    <StatWidget icon={Zap} label="Token Burn" value={(data.totalTokens / 1000).toFixed(1) + 'k'} color="bg-amber-50 text-amber-500" sub="Total Input + Output" />
+                    <StatWidget icon={Users} label="Active Users" value={data.uniqueVisitors} color="bg-emerald-50 text-emerald-600" sub={`${data.registeredUsers} Registered`} />
+                    <StatWidget icon={FileText} label="Events" value={data.totalEvents} color="bg-rose-50 text-rose-600" sub="Last 7 Days" />
                 </div>
 
                 {/* 2. MAIN LAYOUT GRID */}
@@ -208,81 +217,66 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         {/* CHART */}
                         <TrafficChart />
 
-                        {/* BOTTOM ROW WIDGETS */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            
-                            {/* ACTIVE USERS WIDGET (Like "Let's Connect") */}
-                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h4 className="font-black text-zinc-900">Top Active Users</h4>
-                                    <button className="text-indigo-600 text-xs font-bold">See all</button>
-                                </div>
-                                <div className="space-y-4">
-                                    {data.userTable.slice(0, 3).map((u: any, i: number) => (
-                                        <div key={i} className="flex items-center justify-between p-3 hover:bg-zinc-50 rounded-2xl transition-colors group cursor-pointer border border-transparent hover:border-zinc-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 font-bold text-xs border-2 border-white shadow-sm group-hover:scale-110 transition-transform">
-                                                    {u.isUser ? 'U' : 'G'}
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-zinc-900">{u.userId || `Guest ${u.vid.substr(0,4)}`}</p>
-                                                    <p className="text-[10px] text-zinc-400 font-medium">{u.actions} Actions • {u.isUser ? 'Premium' : 'Free'}</p>
-                                                </div>
-                                            </div>
-                                            <button className="w-8 h-8 rounded-full bg-zinc-50 text-zinc-400 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                                                <ArrowUpRight size={16} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* SYSTEM HEALTH WIDGET (Like "Premium Features") */}
-                            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 p-6 rounded-[2rem] text-white shadow-xl flex flex-col justify-between relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                                
+                        {/* USAGE BREAKDOWN (Replaces old 'Active Users' widget with detailed table) */}
+                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50">
+                            <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h4 className="font-black text-lg mb-1">System Health</h4>
-                                    <p className="text-white/60 text-xs">All systems operational.</p>
+                                    <h4 className="font-black text-zinc-900">Heavy Hitters</h4>
+                                    <p className="text-xs text-zinc-400">Users by Token Consumption</p>
                                 </div>
-
-                                <div className="space-y-4 mt-6 relative z-10">
-                                    <div className="flex items-center justify-between text-xs font-bold">
-                                        <span className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div> Gemini API</span>
-                                        <span className="text-emerald-400">99.9%</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs font-bold">
-                                        <span className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-400 rounded-full"></div> Firestore</span>
-                                        <span className="text-emerald-400">OK</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs font-bold">
-                                        <span className="flex items-center gap-2"><div className="w-2 h-2 bg-indigo-400 rounded-full"></div> Stripe</span>
-                                        <span className="text-indigo-400">Live</span>
-                                    </div>
-                                </div>
-
-                                <button className="mt-6 w-full py-3 bg-white/10 backdrop-blur-md rounded-xl text-xs font-bold hover:bg-white/20 transition-colors flex items-center justify-center gap-2">
-                                    View Error Logs <ArrowUpRight size={12} />
-                                </button>
+                                <button className="text-indigo-600 text-xs font-bold">Export CSV</button>
                             </div>
-
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="text-[10px] text-zinc-400 uppercase tracking-widest border-b border-zinc-100">
+                                            <th className="pb-3 pl-2">User / Visitor</th>
+                                            <th className="pb-3">Type</th>
+                                            <th className="pb-3 text-center">Sessions</th>
+                                            <th className="pb-3 text-right">Avg Tokens</th>
+                                            <th className="pb-3 text-right">Total Tokens</th>
+                                            <th className="pb-3 text-right pr-2">Est. Cost</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-sm">
+                                        {data.userTable.slice(0, 10).map((u: any, i: number) => (
+                                            <tr key={i} className="group hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0">
+                                                <td className="py-3 pl-2 font-bold text-zinc-700 font-mono text-xs">
+                                                    {u.identity.length > 20 ? u.identity.substr(0,12) + '...' : u.identity}
+                                                </td>
+                                                <td className="py-3">
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${u.isRegistered ? 'bg-indigo-50 text-indigo-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                                                        {u.isRegistered ? 'User' : 'Guest'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 font-medium text-zinc-600 text-center">{u.sessionCount}</td>
+                                                <td className="py-3 font-medium text-zinc-600 text-right">{Math.round(u.avgTokensPerSession)}</td>
+                                                <td className="py-3 font-bold text-indigo-600 text-right">{(u.tokens / 1000).toFixed(1)}k</td>
+                                                <td className="py-3 text-right pr-2 text-xs font-bold text-emerald-600">
+                                                    RM {u.estimatedCost.toFixed(4)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
                     {/* RIGHT COL (1/3) - FEED */}
                     <div className="xl:col-span-1 space-y-6">
                         
-                        {/* LIVE FEED LIST (Like "Recent Projects") */}
-                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50 h-full">
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="font-black text-zinc-900">Live Feed</h4>
+                        {/* LIVE FEED LIST */}
+                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50 h-[500px] overflow-hidden flex flex-col">
+                            <div className="flex justify-between items-center mb-6 shrink-0">
+                                <h4 className="font-black text-zinc-900">Live Stream</h4>
                                 <div className="w-2 h-2 bg-rose-500 rounded-full animate-ping"></div>
                             </div>
 
-                            <div className="space-y-6 relative">
+                            <div className="flex-1 overflow-y-auto space-y-6 relative pr-2">
                                 <div className="absolute left-[19px] top-4 bottom-4 w-[2px] bg-zinc-100"></div>
                                 
-                                {data.recentLog.slice(0, 6).map((log: any, i: number) => (
+                                {data.recentLog.slice(0, 15).map((log: any, i: number) => (
                                     <div key={i} className="flex gap-4 relative">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-4 border-white z-10 shadow-sm ${log.type === 'ERROR' ? 'bg-rose-100 text-rose-600' : log.type === 'CONVERSION' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
                                             {log.type === 'VIEW' ? <Smartphone size={16} /> : log.type === 'AI_USAGE' ? <Zap size={16} /> : log.type === 'ERROR' ? <Shield size={16} /> : <CheckCircle2 size={16} />}
@@ -292,12 +286,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                             <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide mt-0.5">
                                                 {new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {log.tokens ? `${log.tokens} Tok` : 'Action'}
                                             </p>
-                                            {log.details && Object.keys(log.details).length > 0 && (
-                                                <div className="mt-1.5 px-2 py-1 bg-zinc-50 rounded border border-zinc-100 inline-block">
-                                                    <p className="text-[10px] text-zinc-500 font-mono truncate max-w-[120px]">
-                                                        {JSON.stringify(Object.values(log.details)[0])}
-                                                    </p>
-                                                </div>
+                                            {log.userId && (
+                                                <span className="text-[9px] text-indigo-400 block mt-0.5">User: {log.userId.substr(0,5)}...</span>
                                             )}
                                         </div>
                                     </div>
@@ -305,7 +295,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                             </div>
                         </div>
 
-                        {/* TOKEN BUDGET (Like "Proposal Progress") */}
+                        {/* TOKEN BUDGET */}
                         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="font-black text-zinc-900">Monthly Quota</h4>
