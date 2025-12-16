@@ -6,7 +6,6 @@ import {
   signInWithPopup, 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
-  signInAnonymously as firebaseSignInAnonymously,
   updateProfile, 
   signOut as firebaseSignOut, 
   Auth 
@@ -97,17 +96,6 @@ export const signInWithGoogle = async () => {
     // Directly return the promise so the caller handles the raw error object (with correct .code)
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-};
-
-export const signInAnonymously = async () => {
-    if (!auth) return null;
-    try {
-        const result = await firebaseSignInAnonymously(auth);
-        return result.user;
-    } catch (e) {
-        console.error("Anonymous Sign In Error", e);
-        return null;
-    }
 };
 
 export const registerWithEmail = async (name: string, email: string, pass: string) => {

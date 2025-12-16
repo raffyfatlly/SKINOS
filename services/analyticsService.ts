@@ -252,23 +252,19 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             if (!email && displayName && displayName.includes('@')) {
                 email = displayName;
             }
-            
-            // CHECK ANONYMITY STATUS
-            const isAnonymous = profile.isAnonymous === true;
 
             if (userUsage[uid]) {
                 // User exists in event logs -> Update details
-                // FIX: Don't just set true. Set based on DB profile.
-                userUsage[uid].isRegistered = !isAnonymous;
-                userUsage[uid].identity = isAnonymous ? `Visitor ${uid.substring(0,4)}` : displayName;
+                userUsage[uid].isRegistered = true;
+                userUsage[uid].identity = displayName;
                 if (email) userUsage[uid].email = email;
                 userUsage[uid].originalUid = uid;
             } else {
                 // User exists in DB but NO recent events -> Add them manually
                 userUsage[uid] = {
-                    identity: isAnonymous ? `Visitor ${uid.substring(0,4)}` : displayName,
+                    identity: displayName,
                     email: email,
-                    isRegistered: !isAnonymous,
+                    isRegistered: true,
                     originalUid: uid,
                     tokens: 0,
                     sessions: new Set(),

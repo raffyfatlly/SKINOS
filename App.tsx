@@ -9,7 +9,7 @@ import {
 } from './types';
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
 import { trackEvent } from './services/analyticsService';
-import { auth, signInAnonymously } from './services/firebase';
+import { auth } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { startCheckout } from './services/stripeService';
 
@@ -28,10 +28,10 @@ import PremiumRoutineBuilder from './components/PremiumRoutineBuilder';
 import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 import BetaOfferModal from './components/BetaOfferModal';
-import AdminDashboard from './components/AdminDashboard'; 
+import AdminDashboard from './components/AdminDashboard'; // New Import
 
 // Icons
-import { ScanFace, LayoutGrid, User, Search, Home } from 'lucide-react';
+import { ScanFace, LayoutGrid, User, Search, Home, Loader } from 'lucide-react';
 
 const ADMIN_EMAILS = ['admin@skinos.ai', 'raf@admin.com'];
 
@@ -148,9 +148,7 @@ const App: React.FC = () => {
             setCurrentView(AppView.FACE_SCANNER);
         }
       } else {
-        // No user data found locally
-        // NOTE: We do NOT force Login/Onboarding here yet.
-        // We wait for Firebase Auth to initialize.
+        // No user data found -> Show Landing Page
         setCurrentView(AppView.LANDING);
       }
     };
@@ -158,14 +156,11 @@ const App: React.FC = () => {
 
     const unsubscribe = auth ? onAuthStateChanged(auth, async (user) => {
         if (user) {
-            // AUTH DETECTED (Either Login, Register, or Anonymous)
-            
+            // DETECT LOGIN FLOW: If we are currently on Landing/Onboarding, show loading
             const isLoginFlow = viewRef.current === AppView.LANDING || viewRef.current === AppView.ONBOARDING;
             
-            // Only show loader if we are in a transition state
             if (isLoginFlow) {
-                 // Don't block screen if it's just anonymous login
-                 if (!user.isAnonymous) setIsGlobalLoading(true);
+                 setIsGlobalLoading(true);
             }
 
             try {
@@ -192,59 +187,42 @@ const App: React.FC = () => {
                 const data = await loadUserData();
                 
                 if (data.user) {
-                    // Scenario A: Existing User Data Found
+                    // Scenario A: Existing User (Found in Cloud or Local)
                     
-                    // SELF-HEALING: Patch email if missing
+                    // SELF-HEALING: Check if email is missing in profile but exists in Auth
+                    // This fixes the "No Email" issue in Admin Dashboard
                     let loadedUser = data.user;
                     if (user.email && !loadedUser.email) {
                         loadedUser = { ...loadedUser, email: user.email };
-                        saveUserData(loadedUser, data.shelf);
-                    }
-                    
-                    // FIX: Ensure isAnonymous matches Auth state
-                    // If auth is anonymous, profile must be anonymous.
-                    // If auth is real, profile must NOT be anonymous.
-                    if (loadedUser.isAnonymous !== user.isAnonymous) {
-                        loadedUser = { ...loadedUser, isAnonymous: user.isAnonymous };
-                        saveUserData(loadedUser, data.shelf);
+                        saveUserData(loadedUser, data.shelf); // Force sync to DB
                     }
 
                     setUserProfile(loadedUser);
                     setShelf(data.shelf);
                     
-                    // Only redirect if we were waiting on the landing page/onboarding
+                    // Force navigation if we were in the login flow
                     if (isLoginFlow) {
                         setCurrentView(data.user.hasScannedFace ? AppView.DASHBOARD : AppView.FACE_SCANNER);
                     }
                 } else {
-                    // Scenario B: No Profile Data Yet (Fresh Anonymous or New Login)
-                    
-                    if (user.isAnonymous) {
-                        // It's a fresh guest. Do NOTHING. Let them stay on Landing.
-                        // We do NOT want to force them to Onboarding yet.
-                        // But we DO want to ensure `userProfile` is null so UI stays correct.
-                        setUserProfile(null);
-                        // However, we now have a `user` (uid) so we can write to DB later.
-                    } else {
-                        // It's a Real User (Google/Email) but no profile -> Force Onboarding
-                        if (isLoginFlow) {
-                            if (user.displayName) setPrefillName(user.displayName);
-                            setCurrentView(AppView.ONBOARDING);
+                    // Scenario B: New User via Google (No profile found)
+                    // We need to create a profile. Direct them to Onboarding.
+                    if (isLoginFlow) {
+                        if (user.displayName) {
+                            setPrefillName(user.displayName);
                         }
+                        setCurrentView(AppView.ONBOARDING);
                     }
                 }
             } catch (e) {
                 console.error("Auth Sync Error", e);
             } finally {
+                // Small delay for smooth visual transition
                 setTimeout(() => {
                     setIsGlobalLoading(false);
                     setShowSaveModal(false); 
                 }, 500);
             }
-        } else {
-            // NO USER - AUTO SIGN IN ANONYMOUSLY
-            // This ensures every visitor gets a UID immediately for Analytics/DB access
-            signInAnonymously().catch(err => console.error("Guest Auth Failed", err));
         }
     }) : () => {};
 
@@ -254,8 +232,8 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
   const handleOnboardingComplete = (data: { name: string; age: number; skinType: SkinType }) => {
-      const authUser = auth?.currentUser;
-      const isAnonymous = authUser ? authUser.isAnonymous : true;
+      // Check if user is currently authenticated (e.g. via Google Login flow)
+      const isAuth = !!auth?.currentUser;
 
       const newUser: UserProfile = {
           name: data.name,
@@ -263,39 +241,34 @@ const App: React.FC = () => {
           skinType: data.skinType,
           hasScannedFace: false,
           biometrics: {} as any, 
-          isAnonymous: isAnonymous, 
-          isPremium: false,
-          email: authUser?.email || undefined
+          isAnonymous: !isAuth, // If logged in, they are NOT anonymous
+          isPremium: false, // Default to false
+          email: auth?.currentUser?.email || undefined
       };
       
       setUserProfile(newUser);
       trackEvent('CONVERSION', 'SIGNUP_COMPLETE');
       
-      // Save to Cloud (now works for anonymous too!)
-      saveUserData(newUser, shelf);
+      // If authenticated, save to cloud immediately to link profile to account
+      if (isAuth) {
+          saveUserData(newUser, shelf);
+      } else {
+          // If anonymous, save locally
+          persistState(newUser, shelf);
+      }
 
       setCurrentView(AppView.FACE_SCANNER);
   };
 
   const handleFaceScanComplete = (metrics: SkinMetrics, image: string) => {
-      // Allow scan completion even if userProfile is null (e.g. strict anonymous flow)
-      // If null, create a temporary one
-      const currentProfile = userProfile || {
-          name: "Guest",
-          age: 25,
-          skinType: SkinType.UNKNOWN,
-          hasScannedFace: false,
-          biometrics: {} as any,
-          isAnonymous: true,
-          isPremium: false
-      };
+      if (!userProfile) return;
 
       const updatedUser: UserProfile = {
-          ...currentProfile,
+          ...userProfile,
           hasScannedFace: true,
           biometrics: metrics,
           faceImage: image,
-          scanHistory: [...(currentProfile.scanHistory || []), metrics]
+          scanHistory: [...(userProfile.scanHistory || []), metrics]
       };
 
       persistState(updatedUser, shelf);
@@ -375,9 +348,10 @@ const App: React.FC = () => {
 
       const handleNavClick = (view: AppView) => {
           // RESTRICTION: Only logged-in users can search or scan products
-          // UPDATE: Anonymous users CAN scan now because they have a UID! 
-          // But we might still want to prompt sign up for retention.
-          // For now, allow it to reduce friction.
+          if ((view === AppView.PRODUCT_SEARCH || view === AppView.PRODUCT_SCANNER) && userProfile?.isAnonymous) {
+              openAuth('SCAN_PRODUCT');
+              return;
+          }
           setCurrentView(view);
       };
 
@@ -455,8 +429,11 @@ const App: React.FC = () => {
                     onRemoveProduct={handleRemoveProduct}
                     onUpdateProduct={handleUpdateProduct}
                     onScanNew={() => {
-                        // Allow anonymous scanning too
-                        setCurrentView(AppView.PRODUCT_SCANNER);
+                        if (userProfile.isAnonymous) {
+                            openAuth('SCAN_PRODUCT');
+                        } else {
+                            setCurrentView(AppView.PRODUCT_SCANNER);
+                        }
                     }}
                   />
               ) : null;
