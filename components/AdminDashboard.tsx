@@ -1,11 +1,11 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { getAnalyticsSummary, getMockAnalyticsSummary } from '../services/analyticsService';
 import { 
   Search, Bell, Settings, Calendar, ChevronDown, MoreHorizontal, 
   ArrowUpRight, Users, Zap, Activity, Clock, CheckCircle2, 
   BarChart3, LayoutGrid, Home, Wallet, FileText, LogOut,
-  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X, RotateCw, Eye, Crown, Layers, ScanFace, Footprints
+  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X, RotateCw, Eye, Crown, Layers, ScanFace, Footprints, MousePointerClick, ShoppingBag, Sparkles, UserPlus
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -19,15 +19,31 @@ const formatDate = (ts: number) => new Date(ts).toLocaleDateString([], { month: 
 // FORMATTER FOR EVENT NAMES
 const formatEventName = (name: string) => {
     switch (name) {
-        case 'AI_DERM_CONSULT': return 'AI Consultation';
-        case 'CHAT_SESSION_START': return 'AI Consultation'; // Legacy mapping
+        case 'AI_DERM_CONSULT': return 'Dermatologist Chat';
+        case 'CHAT_SESSION_START': return 'Chat Session';
         case 'FACE_ANALYSIS': return 'Face Scan Analysis';
-        case 'PRODUCT_ANALYSIS_VISION': return 'Product Scan';
+        case 'PRODUCT_ANALYSIS_VISION': return 'Product Scan (Vision)';
         case 'PRODUCT_ANALYSIS_TEXT': return 'Product Search';
-        case 'ROUTINE_BUILD': return 'Routine Builder';
-        case 'ADD_TO_SHELF': return 'Shelf Add';
-        case 'SIGNUP_COMPLETE': return 'New Registration';
+        case 'ROUTINE_BUILD': return 'Routine Generation';
+        case 'ADD_TO_SHELF': return 'Add to Shelf';
+        case 'SIGNUP_COMPLETE': return 'Account Registration';
+        case 'SESSION_START': return 'App Opened';
         default: return name.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+};
+
+const getEventIcon = (type: string, name: string) => {
+    if (name.includes('SIGNUP')) return <UserPlus size={14} />;
+    if (name.includes('FACE')) return <ScanFace size={14} />;
+    if (name.includes('PRODUCT') || name.includes('SHELF')) return <ShoppingBag size={14} />;
+    if (name.includes('ROUTINE') || name.includes('CONSULT')) return <Sparkles size={14} />;
+    
+    switch (type) {
+        case 'AI_USAGE': return <Zap size={14} />;
+        case 'VIEW': return <Eye size={14} />;
+        case 'CONVERSION': return <Crown size={14} />;
+        case 'ERROR': return <AlertTriangle size={14} />;
+        default: return <MousePointerClick size={14} />;
     }
 };
 
@@ -76,6 +92,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // --- FEATURE USAGE STATS CALCULATOR ---
+  const userStats = useMemo(() => {
+      if (!selectedUser) return null;
+      
+      const stats = {
+          faceScans: 0,
+          productLookups: 0,
+          routineBuilds: 0,
+          totalApiCost: 0
+      };
+
+      selectedUser.history.forEach((e: any) => {
+          if (e.name === 'FACE_ANALYSIS') stats.faceScans++;
+          if (e.name.includes('PRODUCT_ANALYSIS')) stats.productLookups++;
+          if (e.name === 'ROUTINE_BUILD') stats.routineBuilds++;
+          if (e.tokens) stats.totalApiCost += (e.tokens / 1000000) * 2.50; // RM Calculation
+      });
+
+      return stats;
+  }, [selectedUser]);
 
   if (loading) {
     return (
@@ -421,7 +458,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                 {data.recentLog.slice(0, 20).map((log: any, i: number) => (
                                     <div key={i} className="flex gap-4 relative py-3 group">
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-4 border-white z-10 shadow-sm transition-transform group-hover:scale-110 ${log.type === 'ERROR' ? 'bg-rose-100 text-rose-600' : log.type === 'CONVERSION' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                                            {log.type === 'VIEW' ? <Smartphone size={14} /> : log.type === 'AI_USAGE' ? <Zap size={14} /> : log.type === 'ERROR' ? <Shield size={14} /> : <CheckCircle2 size={14} />}
+                                            {getEventIcon(log.type, log.name)}
                                         </div>
                                         <div className="flex-1 min-w-0 pt-1 pb-2 border-b border-zinc-50 group-last:border-0">
                                             <div className="flex justify-between items-start">
@@ -483,10 +520,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                 </div>
             </div>
 
-            {/* USER DETAIL MODAL */}
-            {selectedUser && (
+            {/* REDESIGNED USER DETAIL MODAL */}
+            {selectedUser && userStats && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-zinc-900/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
+                        
+                        {/* Header */}
                         <div className="bg-zinc-50 p-8 border-b border-zinc-100 flex justify-between items-start">
                             <div>
                                 <div className="flex items-center gap-3 mb-2">
@@ -505,57 +544,108 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-6 mt-4">
-                                    <div>
-                                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">First Seen</span>
-                                        <span className="text-xs font-bold text-zinc-700">{formatDate(selectedUser.firstSeen)}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Last Active</span>
-                                        <span className="text-xs font-bold text-zinc-700">{formatDate(selectedUser.lastSeen)} • {formatTime(selectedUser.lastSeen)}</span>
-                                    </div>
-                                </div>
                             </div>
                             <button onClick={() => setSelectedUser(null)} className="p-2 bg-white rounded-full border border-zinc-200 hover:bg-zinc-100 transition-colors shadow-sm">
                                 <X size={20} className="text-zinc-400" />
                             </button>
                         </div>
-                        
-                        <div className="flex-1 overflow-y-auto p-8 bg-white">
-                            <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                <Activity size={14} /> Activity Log
-                            </h4>
-                            <div className="relative border-l-2 border-zinc-100 ml-3 space-y-8">
-                                {selectedUser.history.map((event: any, idx: number) => (
-                                    <div key={idx} className="relative pl-8 group">
-                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white shadow-sm transition-transform group-hover:scale-125 ${event.type === 'AI_USAGE' ? 'bg-amber-400' : event.type === 'CONVERSION' ? 'bg-emerald-500' : 'bg-indigo-400'}`}></div>
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <span className="text-sm font-bold text-zinc-900 block group-hover:text-indigo-600 transition-colors">{formatEventName(event.name)}</span>
-                                                <span className="text-[10px] text-zinc-400 font-medium">{formatDate(event.timestamp)} at {formatTime(event.timestamp)}</span>
-                                            </div>
-                                            {event.tokens > 0 && (
-                                                <span className="text-[10px] font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded border border-amber-100 flex items-center gap-1">
-                                                    <Zap size={10} fill="currentColor" /> {event.tokens}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {/* Optional Details Rendering */}
-                                        {event.details && (event.details.query || event.details.productName || event.details.tokens) && (
-                                            <div className="mt-3 bg-zinc-50 p-3 rounded-xl text-[10px] text-zinc-500 font-mono border border-zinc-100">
-                                                {event.details.query && <div className="mb-1"><span className="text-zinc-400">Query:</span> "{event.details.query}"</div>}
-                                                {event.details.productName && <div><span className="text-zinc-400">Product:</span> "{event.details.productName}"</div>}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+
+                        {/* NEW: Feature Usage Summary Row */}
+                        <div className="grid grid-cols-4 gap-4 p-6 border-b border-zinc-100 bg-white">
+                            <div className="p-4 rounded-2xl bg-teal-50 border border-teal-100 flex flex-col items-center justify-center text-center">
+                                <ScanFace size={18} className="text-teal-600 mb-1" />
+                                <span className="text-lg font-black text-teal-900">{userStats.faceScans}</span>
+                                <span className="text-[9px] font-bold text-teal-600 uppercase tracking-wide">Face Scans</span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex flex-col items-center justify-center text-center">
+                                <ShoppingBag size={18} className="text-blue-600 mb-1" />
+                                <span className="text-lg font-black text-blue-900">{userStats.productLookups}</span>
+                                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wide">Products</span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-purple-50 border border-purple-100 flex flex-col items-center justify-center text-center">
+                                <Sparkles size={18} className="text-purple-600 mb-1" />
+                                <span className="text-lg font-black text-purple-900">{userStats.routineBuilds}</span>
+                                <span className="text-[9px] font-bold text-purple-600 uppercase tracking-wide">Routines</span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex flex-col items-center justify-center text-center">
+                                <DollarSign size={18} className="text-amber-600 mb-1" />
+                                <span className="text-lg font-black text-amber-900">RM {userStats.totalApiCost.toFixed(2)}</span>
+                                <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wide">API Cost</span>
                             </div>
                         </div>
                         
-                        <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center text-xs font-bold text-zinc-500">
-                            <span>Total Lifetime Cost</span>
-                            <div className="flex items-center gap-2">
-                                <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm">RM {selectedUser.estimatedCost.toFixed(4)}</span>
+                        {/* Rich Timeline Activity Log */}
+                        <div className="flex-1 overflow-y-auto p-8 bg-zinc-50">
+                            <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <Activity size={14} /> Journey Timeline
+                            </h4>
+                            <div className="relative border-l-2 border-zinc-200 ml-4 space-y-8 pb-4">
+                                {selectedUser.history.map((event: any, idx: number) => {
+                                    const isApi = event.type === 'AI_USAGE';
+                                    const isSignup = event.name.includes('SIGNUP');
+                                    const isError = event.type === 'ERROR';
+                                    
+                                    // Visual Context for API Events
+                                    let contentBadge = null;
+                                    if (isApi) {
+                                        contentBadge = (
+                                            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-amber-200 mt-1">
+                                                <Zap size={10} fill="currentColor" /> {event.tokens} Tokens (~RM {((event.tokens/1000000)*2.5).toFixed(4)})
+                                            </span>
+                                        );
+                                    } else if (isSignup) {
+                                        contentBadge = (
+                                            <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-emerald-200 mt-1">
+                                                <CheckCircle2 size={10} /> Goal Conversion
+                                            </span>
+                                        );
+                                    }
+
+                                    return (
+                                        <div key={idx} className="relative pl-8 group">
+                                            {/* Connector Node */}
+                                            <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-zinc-50 shadow-sm transition-transform group-hover:scale-125 z-10 flex items-center justify-center ${isSignup ? 'bg-emerald-500' : isApi ? 'bg-amber-400' : isError ? 'bg-rose-500' : 'bg-zinc-300'}`}>
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <span className={`text-sm font-bold block ${isSignup ? 'text-emerald-700' : 'text-zinc-900'}`}>
+                                                        {formatEventName(event.name)}
+                                                    </span>
+                                                    
+                                                    {contentBadge}
+
+                                                    {/* Specific Interaction Details */}
+                                                    {event.details && (event.details.query || event.details.productName || event.details.id) && (
+                                                        <div className="mt-2 bg-white p-3 rounded-xl border border-zinc-200 shadow-sm inline-block min-w-[200px]">
+                                                            {event.details.query && (
+                                                                <div className="text-xs text-zinc-600">
+                                                                    <span className="font-bold text-zinc-400 text-[10px] uppercase tracking-wide block mb-0.5">Search Query</span>
+                                                                    "{event.details.query}"
+                                                                </div>
+                                                            )}
+                                                            {event.details.productName && (
+                                                                <div className="text-xs text-zinc-600">
+                                                                    <span className="font-bold text-zinc-400 text-[10px] uppercase tracking-wide block mb-0.5">Product Analyzed</span>
+                                                                    {event.details.productName}
+                                                                </div>
+                                                            )}
+                                                            {/* Show shelf adds */}
+                                                            {event.name === 'ADD_TO_SHELF' && (
+                                                                <div className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                                                                    <ShoppingBag size={12} /> Added Item to Shelf
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap bg-white px-2 py-1 rounded border border-zinc-100">
+                                                    {formatTime(event.timestamp)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
