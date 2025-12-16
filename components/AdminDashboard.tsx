@@ -5,7 +5,7 @@ import {
   Search, Bell, Settings, Calendar, ChevronDown, MoreHorizontal, 
   ArrowUpRight, Users, Zap, Activity, Clock, CheckCircle2, 
   BarChart3, LayoutGrid, Home, Wallet, FileText, LogOut,
-  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign
+  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -17,6 +17,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('Week');
+  
+  // Filter State
+  const [showRegisteredOnly, setShowRegisteredOnly] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -159,6 +162,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
       );
   };
 
+  const filteredUsers = showRegisteredOnly 
+    ? data.userTable.filter((u: any) => u.isRegistered) 
+    : data.userTable;
+
   return (
     <div className="min-h-screen bg-[#F4F7FE] font-sans text-slate-800 flex overflow-hidden">
         
@@ -217,21 +224,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         {/* CHART */}
                         <TrafficChart />
 
-                        {/* USAGE BREAKDOWN (Replaces old 'Active Users' widget with detailed table) */}
+                        {/* USAGE BREAKDOWN */}
                         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-50">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h4 className="font-black text-zinc-900">Heavy Hitters</h4>
-                                    <p className="text-xs text-zinc-400">Users by Token Consumption</p>
+                                    <h4 className="font-black text-zinc-900">User List</h4>
+                                    <p className="text-xs text-zinc-400">By Token Consumption</p>
                                 </div>
-                                <button className="text-indigo-600 text-xs font-bold">Export CSV</button>
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => setShowRegisteredOnly(!showRegisteredOnly)}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${showRegisteredOnly ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-zinc-200 text-zinc-500'}`}
+                                    >
+                                        <Filter size={14} /> 
+                                        {showRegisteredOnly ? 'Registered Only' : 'All Visitors'}
+                                    </button>
+                                    <button className="text-indigo-600 text-xs font-bold bg-indigo-50 px-3 py-1.5 rounded-lg">Export CSV</button>
+                                </div>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="text-[10px] text-zinc-400 uppercase tracking-widest border-b border-zinc-100">
-                                            <th className="pb-3 pl-2">User / Visitor</th>
-                                            <th className="pb-3">Type</th>
+                                            <th className="pb-3 pl-2">User Identity</th>
+                                            <th className="pb-3">Status</th>
                                             <th className="pb-3 text-center">Sessions</th>
                                             <th className="pb-3 text-right">Avg Tokens</th>
                                             <th className="pb-3 text-right">Total Tokens</th>
@@ -239,24 +255,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm">
-                                        {data.userTable.slice(0, 10).map((u: any, i: number) => (
-                                            <tr key={i} className="group hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0">
-                                                <td className="py-3 pl-2 font-bold text-zinc-700 font-mono text-xs">
-                                                    {u.identity.length > 20 ? u.identity.substr(0,12) + '...' : u.identity}
-                                                </td>
-                                                <td className="py-3">
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${u.isRegistered ? 'bg-indigo-50 text-indigo-600' : 'bg-zinc-100 text-zinc-500'}`}>
-                                                        {u.isRegistered ? 'User' : 'Guest'}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 font-medium text-zinc-600 text-center">{u.sessionCount}</td>
-                                                <td className="py-3 font-medium text-zinc-600 text-right">{Math.round(u.avgTokensPerSession)}</td>
-                                                <td className="py-3 font-bold text-indigo-600 text-right">{(u.tokens / 1000).toFixed(1)}k</td>
-                                                <td className="py-3 text-right pr-2 text-xs font-bold text-emerald-600">
-                                                    RM {u.estimatedCost.toFixed(4)}
+                                        {filteredUsers.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="py-8 text-center text-zinc-400 text-sm">
+                                                    No users found matching filter.
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            filteredUsers.slice(0, 10).map((u: any, i: number) => (
+                                                <tr key={i} className="group hover:bg-zinc-50 transition-colors border-b border-zinc-50 last:border-0">
+                                                    <td className="py-3 pl-2">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-zinc-900 text-sm">
+                                                                {u.identity.length > 25 ? u.identity.substr(0,25) + '...' : u.identity}
+                                                            </span>
+                                                            {u.email && (
+                                                                <span className="text-[10px] text-zinc-400 font-medium">{u.email}</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase ${u.isRegistered ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-zinc-100 text-zinc-500'}`}>
+                                                            {u.isRegistered ? <UserCheck size={10} /> : null}
+                                                            {u.isRegistered ? 'Registered' : 'Guest'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 font-medium text-zinc-600 text-center">{u.sessionCount}</td>
+                                                    <td className="py-3 font-medium text-zinc-600 text-right">{Math.round(u.avgTokensPerSession)}</td>
+                                                    <td className="py-3 font-bold text-indigo-600 text-right">{(u.tokens / 1000).toFixed(1)}k</td>
+                                                    <td className="py-3 text-right pr-2 text-xs font-bold text-emerald-600">
+                                                        RM {u.estimatedCost.toFixed(4)}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>

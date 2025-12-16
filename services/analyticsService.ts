@@ -1,5 +1,5 @@
 
-import { collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { AnalyticsEvent } from '../types';
 
@@ -135,7 +135,8 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             lastSeen: number, 
             actions: number,
             lastAction: string,
-            email?: string
+            email?: string,
+            originalUid?: string
         }> = {};
 
         recentEvents.forEach(e => {
@@ -152,15 +153,13 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             dailyTraffic[dateKey] = (dailyTraffic[dateKey] || 0) + 1;
 
             // User Profiling
-            // If logged in, prioritize UserID as key. If guest, use VisitorID.
-            // Note: In a real app, you might want to merge Visitor data into User data upon login. 
-            // Here we treat them based on the event's context.
             const key = e.userId || e.visitorId;
             
             if (!userUsage[key]) {
                 userUsage[key] = { 
                     identity: key,
                     isRegistered: !!e.userId,
+                    originalUid: e.userId,
                     tokens: 0, 
                     sessions: new Set(),
                     lastSeen: 0, 
@@ -181,8 +180,32 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             if (e.userId && !userUsage[key].isRegistered) {
                 userUsage[key].isRegistered = true;
                 userUsage[key].identity = e.userId; 
+                userUsage[key].originalUid = e.userId;
             }
         });
+
+        // --- ENRICHMENT STEP: Fetch User Profiles for Registered Users ---
+        const registeredKeys = Object.keys(userUsage).filter(k => userUsage[k].isRegistered && userUsage[k].originalUid);
+        
+        if (registeredKeys.length > 0) {
+            await Promise.all(registeredKeys.map(async (key) => {
+                const uid = userUsage[key].originalUid;
+                if (!uid) return;
+                
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', uid));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        const profile = userData.profile || {};
+                        // Overwrite identity with Name and store Email
+                        userUsage[key].identity = profile.name || uid;
+                        userUsage[key].email = profile.email || "No Email";
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch profile for ${uid}`, e);
+                }
+            }));
+        }
 
         // Convert Map to Array & Calculate Derived Metrics
         const sortedUsers = Object.values(userUsage)
