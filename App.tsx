@@ -374,10 +374,17 @@ const App: React.FC = () => {
         `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 ${currentView === view ? 'text-teal-600 bg-teal-50 scale-105' : 'text-zinc-400 hover:text-zinc-600'}`;
 
       const handleNavClick = (view: AppView) => {
-          // RESTRICTION: Only logged-in users can search or scan products
-          // UPDATE: Anonymous users CAN scan now because they have a UID! 
-          // But we might still want to prompt sign up for retention.
-          // For now, allow it to reduce friction.
+          // RESTRICTION: Block anonymous users from specific features
+          if (userProfile?.isAnonymous) {
+              if (view === AppView.PRODUCT_SCANNER || view === AppView.PRODUCT_SEARCH) {
+                  openAuth('SCAN_PRODUCT');
+                  return;
+              }
+              if (view === AppView.PROFILE_SETUP) {
+                  openAuth('VIEW_PROGRESS');
+                  return;
+              }
+          }
           setCurrentView(view);
       };
 
@@ -455,7 +462,10 @@ const App: React.FC = () => {
                     onRemoveProduct={handleRemoveProduct}
                     onUpdateProduct={handleUpdateProduct}
                     onScanNew={() => {
-                        // Allow anonymous scanning too
+                        if (userProfile.isAnonymous) {
+                            openAuth('SCAN_PRODUCT');
+                            return;
+                        }
                         setCurrentView(AppView.PRODUCT_SCANNER);
                     }}
                   />

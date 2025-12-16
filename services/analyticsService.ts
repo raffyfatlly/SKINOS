@@ -7,6 +7,9 @@ const COLLECTION_NAME = 'analytics_events';
 const VISITOR_KEY = 'skinos_visitor_id';
 const SESSION_KEY = 'skinos_session_id';
 
+// Define Admins to exclude from analytics
+const ADMIN_EMAILS = ['admin@skinos.ai', 'raf@admin.com'];
+
 // --- IDENTITY MANAGEMENT ---
 
 // 1. Visitor ID (Persistent Device ID)
@@ -145,13 +148,23 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             throw e;
         }
         
-        // 2. Fetch ALL Registered Users (To ensure full list)
-        // Wrapped in try/catch so strict rules on 'users' collection don't crash the whole dashboard
+        // 2. Fetch ALL Registered Users & Identify Admins
         const registeredUsersMap = new Map<string, any>();
+        const adminUids = new Set<string>();
+
         try {
             const usersSnapshot = await getDocs(collection(db, 'users'));
             usersSnapshot.forEach(doc => {
-                registeredUsersMap.set(doc.id, doc.data());
+                const userData = doc.data();
+                const profile = userData.profile || {};
+                const email = profile.email || userData.email;
+                
+                // Identify Admins to filter out
+                if (email && ADMIN_EMAILS.includes(email)) {
+                    adminUids.add(doc.id);
+                } else {
+                    registeredUsersMap.set(doc.id, userData);
+                }
             });
         } catch (e) {
             console.warn("Could not fetch full users list (likely permission restricted). Proceeding with analytics-only data.");
@@ -180,7 +193,13 @@ export const getAnalyticsSummary = async (days: number = 7) => {
 
         // 3. Process Events
         const events = eventSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsEvent & { sessionId?: string }));
-        const recentEvents = events.filter(e => e.timestamp > startDate);
+        
+        // Filter events: Date range AND Exclude Admins
+        const recentEvents = events.filter(e => {
+            if (e.timestamp <= startDate) return false;
+            if (e.userId && adminUids.has(e.userId)) return false;
+            return true;
+        });
 
         recentEvents.forEach(e => {
             // Aggregates
