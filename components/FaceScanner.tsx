@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Sparkles, Image as ImageIcon, ScanFace, BrainCircuit, Target, Lightbulb, CheckCircle2, Focus, X } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, ScanFace, BrainCircuit, Target, Lightbulb, CheckCircle2, Focus, X, ArrowRight } from 'lucide-react';
 import { analyzeSkinFrame, drawBiometricOverlay, validateFrame, applyClinicalOverlays, applyMedicalProcessing, preprocessForAI } from '../services/visionService';
 import { analyzeFaceSkin } from '../services/geminiService';
 import { SkinMetrics } from '../types';
@@ -46,6 +46,11 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
   const [capturedSnapshot, setCapturedSnapshot] = useState<string | null>(null);
   const [currentTip, setCurrentTip] = useState<string>("");
   
+  // Result Display Logic
+  const [resultMetrics, setResultMetrics] = useState<SkinMetrics | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [animatedScore, setAnimatedScore] = useState(0);
+
   // Focus Logic
   const [showFocusTarget, setShowFocusTarget] = useState<{x: number, y: number} | null>(null);
   const [currentStream, setCurrentStream] = useState<MediaStream | null>(null);
@@ -128,6 +133,25 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
           clearInterval(tipInterval);
       };
   }, [isProcessingAI]);
+
+  // Score Animation Effect
+  useEffect(() => {
+    if (showResult && resultMetrics) {
+      let start = 0;
+      const end = resultMetrics.overallScore;
+      const duration = 2000;
+      const startTime = performance.now();
+
+      const animate = (time: number) => {
+        const elapsed = time - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 4); // EaseOutQuart
+        setAnimatedScore(Math.round(start + (end - start) * ease));
+        if (progress < 1) requestAnimationFrame(animate);
+      };
+      requestAnimationFrame(animate);
+    }
+  }, [showResult, resultMetrics]);
 
   // Handle Manual Focus Tap
   const handleTapToFocus = async (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
@@ -254,6 +278,16 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
       return '';
   };
 
+  const finalizeScan = (metrics: SkinMetrics, image: string) => {
+      setResultMetrics(metrics);
+      setCapturedSnapshot(image);
+      setAiProgress(100);
+      setTimeout(() => {
+          setIsProcessingAI(false);
+          setShowResult(true);
+      }, 500);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -291,11 +325,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
 
                   // Pass image, local metrics, AND HISTORY to AI for context-aware analysis
                   analyzeFaceSkin(processedBase64, localMetrics, scanHistory).then(aiMetrics => {
-                      setAiProgress(100);
-                      setTimeout(() => {
-                        onScanComplete(aiMetrics, displaySnapshot);
-                        setIsProcessingAI(false);
-                      }, 500);
+                      finalizeScan(aiMetrics, displaySnapshot);
                   }).catch(err => {
                       console.error(err);
                       setIsProcessingAI(false);
@@ -378,17 +408,10 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
 
            // Pass averaged local metrics AND HISTORY as anchor
            analyzeFaceSkin(processedImage, avgLocalMetrics, scanHistory).then(aiMetrics => {
-               setAiProgress(100);
-               setTimeout(() => {
-                   const finalMetrics = { ...aiMetrics };
-                   onScanComplete(finalMetrics, displayImage);
-               }, 500);
+               finalizeScan(aiMetrics, displayImage);
            }).catch(err => {
                console.error("AI Failed", err);
-               setAiProgress(100);
-               setTimeout(() => {
-                   onScanComplete(avgLocalMetrics, displayImage);
-               }, 500);
+               finalizeScan(avgLocalMetrics, displayImage);
            });
       }
     }
@@ -396,7 +419,7 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
     if (isScanning && !isProcessingAI) {
       requestAnimationFrame(scanFrame);
     }
-  }, [isScanning, isProcessingAI, onScanComplete, scanHistory]);
+  }, [isScanning, isProcessingAI, scanHistory]);
 
   useEffect(() => {
     if (isScanning) {
@@ -425,6 +448,66 @@ const FaceScanner: React.FC<FaceScannerProps> = ({ onScanComplete, scanHistory, 
       if (statusColor === 'error') return 'bg-rose-500 border-rose-600 text-white';
       if (statusColor === 'warning') return 'bg-amber-400 border-amber-500 text-amber-900';
       return 'bg-white/90 border-white text-zinc-900';
+  }
+
+  // --- RENDER: RESULT OVERLAY ---
+  if (showResult && resultMetrics && capturedSnapshot) {
+      return (
+        <div className="relative h-screen w-full bg-black font-sans overflow-hidden animate-in fade-in duration-700">
+            {/* Background Image */}
+            <img src={capturedSnapshot} className="absolute inset-0 w-full h-full object-cover opacity-80" alt="Scan Result" />
+            
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90" />
+            <div className="absolute inset-0 bg-teal-900/10 mix-blend-overlay" />
+
+            <div className="relative z-10 h-full flex flex-col items-center justify-between py-safe pt-12 pb-12 px-6">
+                
+                {/* Header */}
+                <div className="animate-in slide-in-from-top-8 duration-700 delay-100">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-xl">
+                        <CheckCircle2 size={16} className="text-emerald-400" />
+                        <span className="text-xs font-bold text-white uppercase tracking-widest">Analysis Complete</span>
+                    </div>
+                </div>
+
+                {/* Main Score Display */}
+                <div className="flex flex-col items-center justify-center relative w-full">
+                    {/* Rotating Rings */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] border border-white/10 rounded-full animate-[spin_20s_linear_infinite]" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[240px] h-[240px] border border-white/5 rounded-full animate-[spin_15s_linear_infinite_reverse]" />
+                    
+                    {/* Glow effect */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] bg-teal-500/20 blur-[60px] rounded-full" />
+
+                    <div className="relative z-10 flex flex-col items-center">
+                        <span className="text-xs font-bold text-teal-200 uppercase tracking-[0.3em] mb-4 animate-in fade-in duration-1000 delay-300 shadow-black drop-shadow-md">Overall Score</span>
+                        
+                        {/* Big Number */}
+                        <div className="text-[9rem] leading-[0.85] font-black text-white tracking-tighter drop-shadow-2xl animate-in zoom-in-50 duration-1000 ease-out select-none">
+                            {animatedScore}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer / Continue */}
+                <div className="w-full max-w-xs animate-in slide-in-from-bottom-8 duration-700 delay-500 flex flex-col items-center">
+                    <p className="text-center text-white/90 text-sm font-medium mb-8 leading-relaxed max-w-[260px] drop-shadow-md">
+                        Your clinical metrics are ready. <br/> Let's breakdown your skin health.
+                    </p>
+                    <button 
+                        onClick={() => onScanComplete(resultMetrics, capturedSnapshot)}
+                        className="w-full h-16 bg-white text-teal-950 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(255,255,255,0.2)] flex items-center justify-center gap-3 group"
+                    >
+                        View Full Report 
+                        <div className="w-8 h-8 rounded-full bg-teal-950/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                             <ArrowRight size={16} />
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+      )
   }
 
   if (isProcessingAI) {
