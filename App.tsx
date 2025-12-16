@@ -9,7 +9,7 @@ import {
 } from './types';
 import { loadUserData, saveUserData, syncLocalToCloud, clearLocalData } from './services/storageService';
 import { trackEvent } from './services/analyticsService';
-import { auth } from './services/firebase';
+import { auth, signInAnonymously } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { startCheckout } from './services/stripeService';
 
@@ -28,7 +28,7 @@ import PremiumRoutineBuilder from './components/PremiumRoutineBuilder';
 import SaveProfileModal, { AuthTrigger } from './components/SaveProfileModal';
 import SmartNotification, { NotificationType } from './components/SmartNotification';
 import BetaOfferModal from './components/BetaOfferModal';
-import AdminDashboard from './components/AdminDashboard'; // New Import
+import AdminDashboard from './components/AdminDashboard'; 
 
 // Icons
 import { ScanFace, LayoutGrid, User, Search, Home, Loader } from 'lucide-react';
@@ -164,7 +164,10 @@ const App: React.FC = () => {
             }
 
             try {
-                await syncLocalToCloud();
+                // Only attempt sync if this is a registered user
+                if (!user.isAnonymous) {
+                    await syncLocalToCloud();
+                }
                 
                 // ADMIN REDIRECT ON LOGIN
                 if (user.email && ADMIN_EMAILS.includes(user.email)) {
@@ -194,7 +197,14 @@ const App: React.FC = () => {
                     let loadedUser = data.user;
                     if (user.email && !loadedUser.email) {
                         loadedUser = { ...loadedUser, email: user.email };
-                        saveUserData(loadedUser, data.shelf); // Force sync to DB
+                        // We only force cloud save if user is registered to avoid errors
+                        if (!user.isAnonymous) saveUserData(loadedUser, data.shelf); 
+                    }
+
+                    // Ensure isAnonymous matches actual Auth state
+                    if (loadedUser.isAnonymous !== user.isAnonymous) {
+                        loadedUser = { ...loadedUser, isAnonymous: user.isAnonymous };
+                        saveUserData(loadedUser, data.shelf);
                     }
 
                     setUserProfile(loadedUser);
@@ -212,6 +222,9 @@ const App: React.FC = () => {
                             setPrefillName(user.displayName);
                         }
                         setCurrentView(AppView.ONBOARDING);
+                    } else if (user.isAnonymous) {
+                        // Anonymous auto-login case where no local data exists yet
+                        setUserProfile(null);
                     }
                 }
             } catch (e) {
@@ -223,6 +236,10 @@ const App: React.FC = () => {
                     setShowSaveModal(false); 
                 }, 500);
             }
+        } else {
+            // NO USER - AUTO SIGN IN ANONYMOUSLY
+            // This ensures every visitor gets a UID immediately for Analytics/DB access
+            signInAnonymously().catch(err => console.error("Guest Auth Failed", err));
         }
     }) : () => {};
 
@@ -232,8 +249,9 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
   const handleOnboardingComplete = (data: { name: string; age: number; skinType: SkinType }) => {
-      // Check if user is currently authenticated (e.g. via Google Login flow)
-      const isAuth = !!auth?.currentUser;
+      // Fix: Check isAnonymous property explicitly on current user object
+      const authUser = auth?.currentUser;
+      const isAnonymousUser = authUser ? authUser.isAnonymous : true;
 
       const newUser: UserProfile = {
           name: data.name,
@@ -241,34 +259,37 @@ const App: React.FC = () => {
           skinType: data.skinType,
           hasScannedFace: false,
           biometrics: {} as any, 
-          isAnonymous: !isAuth, // If logged in, they are NOT anonymous
-          isPremium: false, // Default to false
-          email: auth?.currentUser?.email || undefined
+          isAnonymous: isAnonymousUser, // Correctly set flag
+          isPremium: false, 
+          email: authUser?.email || undefined
       };
       
       setUserProfile(newUser);
       trackEvent('CONVERSION', 'SIGNUP_COMPLETE');
       
-      // If authenticated, save to cloud immediately to link profile to account
-      if (isAuth) {
-          saveUserData(newUser, shelf);
-      } else {
-          // If anonymous, save locally
-          persistState(newUser, shelf);
-      }
+      saveUserData(newUser, shelf);
 
       setCurrentView(AppView.FACE_SCANNER);
   };
 
   const handleFaceScanComplete = (metrics: SkinMetrics, image: string) => {
-      if (!userProfile) return;
+      // Handle case where user might be null (unlikely but safe)
+      const currentProfile = userProfile || {
+          name: "Guest",
+          age: 25,
+          skinType: SkinType.UNKNOWN,
+          hasScannedFace: false,
+          biometrics: {} as any,
+          isAnonymous: true,
+          isPremium: false
+      };
 
       const updatedUser: UserProfile = {
-          ...userProfile,
+          ...currentProfile,
           hasScannedFace: true,
           biometrics: metrics,
           faceImage: image,
-          scanHistory: [...(userProfile.scanHistory || []), metrics]
+          scanHistory: [...(currentProfile.scanHistory || []), metrics]
       };
 
       persistState(updatedUser, shelf);
@@ -347,9 +368,10 @@ const App: React.FC = () => {
         `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 ${currentView === view ? 'text-teal-600 bg-teal-50 scale-105' : 'text-zinc-400 hover:text-zinc-600'}`;
 
       const handleNavClick = (view: AppView) => {
-          // RESTRICTION: Only logged-in users can search or scan products
-          if ((view === AppView.PRODUCT_SEARCH || view === AppView.PRODUCT_SCANNER) && userProfile?.isAnonymous) {
-              openAuth('SCAN_PRODUCT');
+          // RESTRICTION: Only logged-in users can search or scan products or view Profile Setup
+          if ((view === AppView.PRODUCT_SEARCH || view === AppView.PRODUCT_SCANNER || view === AppView.PROFILE_SETUP) && userProfile?.isAnonymous) {
+              const trigger = view === AppView.PROFILE_SETUP ? 'VIEW_PROGRESS' : 'SCAN_PRODUCT';
+              openAuth(trigger);
               return;
           }
           setCurrentView(view);

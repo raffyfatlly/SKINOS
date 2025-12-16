@@ -8,6 +8,7 @@ import {
   signInWithEmailAndPassword, 
   updateProfile, 
   signOut as firebaseSignOut, 
+  signInAnonymously as firebaseSignInAnonymously,
   Auth 
 } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
@@ -117,6 +118,12 @@ export const loginWithEmail = async (email: string, pass: string) => {
   if (!auth) throw new Error("Firebase auth not initialized");
   const userCredential = await signInWithEmailAndPassword(auth, email, pass);
   return userCredential.user;
+};
+
+export const signInAnonymously = async () => {
+    if (!auth) throw new Error("Firebase auth not initialized");
+    const result = await firebaseSignInAnonymously(auth);
+    return result.user;
 };
 
 export const signOut = async () => {

@@ -8,10 +8,12 @@ const SHELF_KEY = 'skinos_shelf_v2';
 
 // --- LOAD DATA ---
 export const loadUserData = async (): Promise<{ user: UserProfile | null, shelf: Product[] }> => {
-    // 1. Try Cloud First if Logged In
-    if (auth?.currentUser && db) {
+    // 1. Try Cloud First only if Registered User (Non-Anonymous)
+    // This prevents permission-denied errors for guest users.
+    const user = auth?.currentUser;
+    if (user && !user.isAnonymous && db) {
         try {
-            const docRef = doc(db, "users", auth.currentUser.uid);
+            const docRef = doc(db, "users", user.uid);
             const docSnap = await getDoc(docRef);
             
             if (docSnap.exists()) {
@@ -42,19 +44,21 @@ export const saveUserData = async (user: UserProfile, shelf: Product[]) => {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.setItem(SHELF_KEY, JSON.stringify(shelf));
 
-    // 2. If Logged In, Sync to Cloud
-    if (auth?.currentUser && db) {
+    const currentUser = auth?.currentUser;
+
+    // 2. If Logged In (Registered), Sync to Cloud
+    // Anonymous users save locally only to prevent permission errors.
+    if (currentUser && !currentUser.isAnonymous && db) {
         try {
-            const docRef = doc(db, "users", auth.currentUser.uid);
+            const docRef = doc(db, "users", currentUser.uid);
             
-            // CRITICAL FIX: Ensure email is captured from Auth if missing in profile
-            // This ensures Admin Dashboard can read it from Firestore
-            const authEmail = auth.currentUser.email;
+            // Fix: Capture actual Auth email if available
+            const authEmail = currentUser.email;
             const finalEmail = user.email || authEmail || undefined;
             
             const cloudProfile = { 
                 ...user, 
-                isAnonymous: false,
+                isAnonymous: false, 
                 email: finalEmail 
             };
             
@@ -62,7 +66,8 @@ export const saveUserData = async (user: UserProfile, shelf: Product[]) => {
                 profile: cloudProfile,
                 email: finalEmail, // Explicitly save at root for easy indexing/admin viewing
                 shelf: shelf,
-                lastUpdated: Date.now()
+                lastUpdated: Date.now(),
+                isRegistered: true
             }, { merge: true });
         } catch (e) {
             console.error("Cloud Save Error:", e);
@@ -88,12 +93,10 @@ export const syncLocalToCloud = async () => {
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) {
-        // New cloud account: Upload local data
+        // Since the user is now authenticated, saveUserData will sync to cloud
         await saveUserData(localUser, localShelf);
         console.log("Synced local data to new cloud account");
     } else {
-        // Existing cloud account: Strategy -> Keep Cloud Profile, Merge Shelf? 
-        // For simplicity, we assume Cloud is source of truth, but we merge shelf items if not present
         console.log("Cloud account exists, switching to cloud data");
     }
 };
@@ -118,8 +121,6 @@ export const claimAccessCode = async (code: string): Promise<{ success: boolean;
 
     const uid = auth.currentUser.uid;
     const codeId = code.trim().toUpperCase();
-    
-    // Use the code as the document ID to ensure uniqueness via Firestore constraints
     const codeRef = doc(db, "claimed_codes", codeId);
 
     try {
