@@ -268,7 +268,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredUsers.slice(0, 10).map((u: any, i: number) => (
+                                            // INCREASED LIMIT TO 100 TO SHOW FULL LIST
+                                            filteredUsers.slice(0, 100).map((u: any, i: number) => (
                                                 <tr 
                                                     key={i} 
                                                     onClick={() => setSelectedUser(u)}

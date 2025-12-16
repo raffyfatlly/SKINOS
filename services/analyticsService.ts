@@ -93,44 +93,30 @@ export const getAnalyticsSummary = async (days: number = 7) => {
     const startDate = Date.now() - (days * 24 * 60 * 60 * 1000);
     
     try {
+        // 1. Fetch Events (Last 2000)
         const q = query(
             collection(db, COLLECTION_NAME), 
             orderBy('timestamp', 'desc'), 
             limit(2000) 
         );
         
-        const snapshot = await getDocs(q);
+        const eventSnapshot = await getDocs(q);
         
-        if (snapshot.empty) {
-            return {
-                totalEvents: 0,
-                uniqueVisitors: 0,
-                registeredUsers: 0,
-                totalTokens: 0,
-                estimatedCost: 0,
-                topFeatures: [],
-                recentLog: [],
-                userTable: [],
-                chartData: [],
-                allEvents: []
-            };
-        }
-
-        const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsEvent & { sessionId?: string }));
+        // 2. Fetch ALL Registered Users (To ensure full list)
+        // This ensures users who haven't logged an event recently still show up.
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const registeredUsersMap = new Map<string, any>();
+        usersSnapshot.forEach(doc => {
+            registeredUsersMap.set(doc.id, doc.data());
+        });
         
-        // Filter by date range
-        const recentEvents = events.filter(e => e.timestamp > startDate);
-
-        // Aggregation Logic
-        const uniqueVisitors = new Set(recentEvents.map(e => e.visitorId));
-        const uniqueUsers = new Set(recentEvents.filter(e => e.userId).map(e => e.userId));
-        
+        // Initial Defaults
         let totalTokens = 0;
         let featureCounts: Record<string, number> = {};
         let dailyTraffic: Record<string, number> = {};
-        
-        // Enhanced User Tracking (aggregates by User OR Visitor ID)
-        // Key = UserID (if exists) OR VisitorID
+        const uniqueVisitors = new Set<string>();
+
+        // User Usage Map
         let userUsage: Record<string, { 
             identity: string,
             isRegistered: boolean,
@@ -142,21 +128,20 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             lastAction: string,
             email?: string,
             originalUid?: string,
-            history: any[] // Store event history
+            history: any[]
         }> = {};
 
-        recentEvents.forEach(e => {
-            // Token Sum
-            if (e.tokens) totalTokens += e.tokens;
-            
-            // Feature Popularity
-            if (e.type === 'VIEW') {
-                featureCounts[e.name] = (featureCounts[e.name] || 0) + 1;
-            }
+        // 3. Process Events
+        const events = eventSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsEvent & { sessionId?: string }));
+        const recentEvents = events.filter(e => e.timestamp > startDate);
 
-            // Daily Stats for Chart
+        recentEvents.forEach(e => {
+            // Aggregates
+            if (e.tokens) totalTokens += e.tokens;
+            if (e.type === 'VIEW') featureCounts[e.name] = (featureCounts[e.name] || 0) + 1;
             const dateKey = new Date(e.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             dailyTraffic[dateKey] = (dailyTraffic[dateKey] || 0) + 1;
+            uniqueVisitors.add(e.visitorId);
 
             // User Profiling
             const key = e.userId || e.visitorId;
@@ -176,17 +161,14 @@ export const getAnalyticsSummary = async (days: number = 7) => {
                 };
             }
             
-            // Update Aggregates
             userUsage[key].tokens += (e.tokens || 0);
             userUsage[key].actions += 1;
             userUsage[key].lastAction = e.name;
             if (e.sessionId) userUsage[key].sessions.add(e.sessionId);
             
-            // Update Timestamps
             if (e.timestamp > userUsage[key].lastSeen) userUsage[key].lastSeen = e.timestamp;
             if (e.timestamp < userUsage[key].firstSeen) userUsage[key].firstSeen = e.timestamp;
             
-            // Add to History (Max 50 per user to keep payload sane)
             if (userUsage[key].history.length < 50) {
                 userUsage[key].history.push({
                     name: e.name,
@@ -205,28 +187,36 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             }
         });
 
-        // --- ENRICHMENT STEP: Fetch User Profiles for Registered Users ---
-        const registeredKeys = Object.keys(userUsage).filter(k => userUsage[k].isRegistered && userUsage[k].originalUid);
-        
-        if (registeredKeys.length > 0) {
-            await Promise.all(registeredKeys.map(async (key) => {
-                const uid = userUsage[key].originalUid;
-                if (!uid) return;
-                
-                try {
-                    const userDoc = await getDoc(doc(db, 'users', uid));
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        const profile = userData.profile || {};
-                        // Overwrite identity with Name and store Email
-                        userUsage[key].identity = profile.name || uid;
-                        userUsage[key].email = profile.email || "No Email";
-                    }
-                } catch (e) {
-                    console.warn(`Failed to fetch profile for ${uid}`, e);
-                }
-            }));
-        }
+        // 4. Merge Real Users (Database Source of Truth)
+        // This iterates through the actual DB users and ensures they are in the list.
+        registeredUsersMap.forEach((userData, uid) => {
+            const profile = userData.profile || {};
+            const displayName = profile.name || uid;
+            const email = profile.email || "No Email";
+
+            if (userUsage[uid]) {
+                // User exists in event logs -> Update details
+                userUsage[uid].isRegistered = true;
+                userUsage[uid].identity = displayName;
+                userUsage[uid].email = email;
+                userUsage[uid].originalUid = uid;
+            } else {
+                // User exists in DB but NO recent events -> Add them manually
+                userUsage[uid] = {
+                    identity: displayName,
+                    email: email,
+                    isRegistered: true,
+                    originalUid: uid,
+                    tokens: 0,
+                    sessions: new Set(),
+                    firstSeen: userData.lastUpdated || Date.now(),
+                    lastSeen: userData.lastUpdated || Date.now(), // Might be old
+                    actions: 0,
+                    lastAction: 'Inactive',
+                    history: []
+                };
+            }
+        });
 
         // Convert Map to Array & Calculate Derived Metrics
         const sortedUsers = Object.values(userUsage)
@@ -239,18 +229,22 @@ export const getAnalyticsSummary = async (days: number = 7) => {
                     sessionCount,
                     avgTokensPerSession: Math.round(u.tokens / sessionCount),
                     estimatedCost: cost,
-                    // Sort history by time desc
                     history: u.history.sort((a: any, b: any) => b.timestamp - a.timestamp)
                 };
             })
-            .sort((a, b) => b.lastSeen - a.lastSeen); // Sort by most recently active
+            // Sort by Registered First, then Most Recent
+            .sort((a, b) => {
+                if (a.isRegistered && !b.isRegistered) return -1;
+                if (!a.isRegistered && b.isRegistered) return 1;
+                return b.lastSeen - a.lastSeen;
+            });
 
         const chartData = Object.entries(dailyTraffic).map(([date, count]) => ({ date, count }));
 
         return {
             totalEvents: recentEvents.length,
             uniqueVisitors: uniqueVisitors.size,
-            registeredUsers: uniqueUsers.size,
+            registeredUsers: registeredUsersMap.size, // Actual DB Count
             totalTokens,
             estimatedCost: (totalTokens / 1000000) * 2.50, 
             topFeatures: Object.entries(featureCounts).sort((a,b) => b[1] - a[1]),
