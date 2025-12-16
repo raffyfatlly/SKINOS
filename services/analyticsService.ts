@@ -86,7 +86,7 @@ export const estimateTokens = (inputText: string, outputText: string = ''): numb
 // --- MOCK DATA GENERATOR (Fallback) ---
 export const getMockAnalyticsSummary = () => {
     const mockUsers = Array.from({ length: 15 }).map((_, i) => ({
-        identity: i % 3 === 0 ? `User_${i}` : `Guest_${Math.random().toString(36).substr(2, 5)}`,
+        identity: i % 3 === 0 ? `User_${i}` : `Visitor ${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
         isRegistered: i % 3 === 0,
         email: i % 3 === 0 ? `user${i}@example.com` : undefined,
         tokens: Math.floor(Math.random() * 50000),
@@ -191,12 +191,19 @@ export const getAnalyticsSummary = async (days: number = 7) => {
             uniqueVisitors.add(e.visitorId);
 
             // User Profiling
+            // IMPORTANT: Group by UserID if present, otherwise VisitorID
             const key = e.userId || e.visitorId;
+            const isGuest = !e.userId;
             
+            // Format Visitor ID to look nice (e.g., Visitor 8A2B)
+            // If they are a user, use their UID initially (will be overwritten by name later)
+            const shortVisitorId = e.visitorId ? e.visitorId.substring(2, 6).toUpperCase() : 'UNKNOWN';
+            const guestIdentity = `Visitor ${shortVisitorId}`;
+
             if (!userUsage[key]) {
                 userUsage[key] = { 
-                    identity: key,
-                    isRegistered: !!e.userId,
+                    identity: isGuest ? guestIdentity : (e.userId || 'Unknown User'),
+                    isRegistered: !isGuest,
                     originalUid: e.userId,
                     tokens: 0, 
                     sessions: new Set(),
@@ -226,7 +233,7 @@ export const getAnalyticsSummary = async (days: number = 7) => {
                 });
             }
 
-            // Upgrade status if they logged in later in the stream
+            // Upgrade status if a guest performs a login action later in the stream
             if (e.userId && !userUsage[key].isRegistered) {
                 userUsage[key].isRegistered = true;
                 userUsage[key].identity = e.userId; 
@@ -235,22 +242,15 @@ export const getAnalyticsSummary = async (days: number = 7) => {
         });
 
         // 4. Merge Real Users (Database Source of Truth)
-        // This iterates through the actual DB users and ensures they are in the list.
+        // This ensures we have names/emails for registered users, and adds users who haven't been active recently
         registeredUsersMap.forEach((userData, uid) => {
             const profile = userData.profile || {};
             const displayName = profile.name || uid;
             
             // ROBUST EMAIL EXTRACTION
-            // 1. Try profile.email
-            // 2. Try userData.email (sometimes saved at root)
-            // 3. Fallback
             let email = profile.email || userData.email;
-            
-            if (!email) {
-                // Last resort: If we don't have email but have name, check if name looks like email
-                if (displayName && displayName.includes('@')) {
-                    email = displayName;
-                }
+            if (!email && displayName && displayName.includes('@')) {
+                email = displayName;
             }
 
             if (userUsage[uid]) {
@@ -291,7 +291,7 @@ export const getAnalyticsSummary = async (days: number = 7) => {
                     history: u.history.sort((a: any, b: any) => b.timestamp - a.timestamp)
                 };
             })
-            // Sort by Registered First, then Most Recent
+            // Sort by: Registered first, then by activity
             .sort((a, b) => {
                 if (a.isRegistered && !b.isRegistered) return -1;
                 if (!a.isRegistered && b.isRegistered) return 1;

@@ -5,7 +5,7 @@ import {
   Search, Bell, Settings, Calendar, ChevronDown, MoreHorizontal, 
   ArrowUpRight, Users, Zap, Activity, Clock, CheckCircle2, 
   BarChart3, LayoutGrid, Home, Wallet, FileText, LogOut,
-  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X, RotateCw, Eye, Crown, Layers, ScanFace
+  Smartphone, Monitor, Shield, AlertTriangle, Database, DollarSign, Filter, UserCheck, X, RotateCw, Eye, Crown, Layers, ScanFace, Footprints
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -363,15 +363,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                     <td className="py-4 pl-8">
                                                         <div className="flex items-center gap-3">
                                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border ${u.isRegistered ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
-                                                                {u.identity.charAt(0).toUpperCase()}
+                                                                {u.isRegistered ? u.identity.charAt(0).toUpperCase() : <Footprints size={12} />}
                                                             </div>
                                                             <div className="flex flex-col">
                                                                 <span className="font-bold text-zinc-900 text-xs group-hover:text-indigo-700 transition-colors">
                                                                     {u.identity.length > 20 ? u.identity.substr(0,20) + '...' : u.identity}
                                                                 </span>
                                                                 {/* ROBUST EMAIL DISPLAY */}
-                                                                <span className={`text-[10px] font-bold block ${u.email ? 'text-zinc-500' : 'text-zinc-400 font-mono'}`}>
-                                                                    {u.email || (u.originalUid ? `ID: ${u.originalUid.substring(0,8)}...` : 'Guest')}
+                                                                <span className={`text-[10px] font-bold block ${u.email ? 'text-zinc-500' : 'text-zinc-300 font-mono'}`}>
+                                                                    {u.email || (u.originalUid ? `ID: ${u.originalUid.substring(0,8)}...` : u.isRegistered ? 'No Email' : 'Anonymous')}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -379,7 +379,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                     <td className="py-4">
                                                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border ${u.isRegistered ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-zinc-50 text-zinc-500 border-zinc-100'}`}>
                                                             {u.isRegistered ? <UserCheck size={10} /> : <ScanFace size={10} />}
-                                                            {u.isRegistered ? 'Member' : 'Guest'}
+                                                            {u.isRegistered ? 'Member' : 'Visitor'}
                                                         </span>
                                                     </td>
                                                     <td className="py-4">
@@ -491,7 +491,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                             <div>
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black text-white shadow-md ${selectedUser.isRegistered ? 'bg-gradient-to-br from-indigo-500 to-violet-600' : 'bg-gradient-to-br from-zinc-400 to-zinc-600'}`}>
-                                        {selectedUser.identity.charAt(0).toUpperCase()}
+                                        {selectedUser.isRegistered ? selectedUser.identity.charAt(0).toUpperCase() : <Footprints size={24} />}
                                     </div>
                                     <div>
                                         <h3 className="text-xl font-black text-zinc-900 tracking-tight">{selectedUser.identity}</h3>
