@@ -478,11 +478,14 @@ export const getBuyingDecision = (product: Product, shelf: Product[], user: User
     } else if (audit.adjustedScore < 60) {
         decision = 'CAUTION'; color = 'amber';
     }
+
+    // FIX: Explicitly calculate conflicts so the buying assistant can display them
+    const context = analyzeProductContext(product, shelf);
     
     return {
         verdict: { decision, title: decision, description: audit.analysisReason, color },
         audit,
-        shelfConflicts: [], // To be populated by analyzeProductContext logic if needed
+        shelfConflicts: context.conflicts, 
         comparison: { result: audit.adjustedScore > 70 ? 'BETTER' : 'NEUTRAL' }
     };
 };

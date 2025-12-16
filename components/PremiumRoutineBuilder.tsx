@@ -1,9 +1,9 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { UserProfile } from '../types';
 import { generateRoutineRecommendations } from '../services/geminiService';
 import { startCheckout } from '../services/stripeService';
-import { Sparkles, ArrowLeft, Sun, Moon, DollarSign, Star, Zap, ShieldCheck, Loader, ChevronDown, CheckCircle2, Crown, Lock } from 'lucide-react';
+import { Sparkles, ArrowLeft, Sun, Moon, DollarSign, Star, Zap, ShieldCheck, Loader, ChevronDown, CheckCircle2, Crown, Lock, AlertCircle, RotateCw } from 'lucide-react';
 
 interface RoutineProduct {
     name: string;
@@ -34,33 +34,38 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
     const [activeTab, setActiveTab] = useState<'AM' | 'PM'>('AM');
     const [routine, setRoutine] = useState<RoutineData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
     
     // Check if user is premium
     const isPaid = !!user.isPremium; 
 
-    useEffect(() => {
-        if (!isPaid) return; // Don't fetch if not paid
-
-        const fetchRoutine = async () => {
-            setLoading(true);
-            try {
-                const data = await generateRoutineRecommendations(user);
-                if (data && data.am) {
-                    setRoutine(data);
-                    // Auto-expand first step
-                    if (data.am.length > 0) {
-                        setExpandedSteps({ [`AM-0`]: true });
-                    }
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
+    const fetchRoutine = useCallback(async () => {
+        if (!isPaid) return;
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await generateRoutineRecommendations(user);
+            
+            // Validate data structure
+            if (data && data.am && Array.isArray(data.am) && data.am.length > 0) {
+                setRoutine(data);
+                setExpandedSteps({ [`AM-0`]: true });
+            } else {
+                // If API returns empty/null/bad format
+                setError("AI generation failed. The server might be busy.");
             }
-        };
-        fetchRoutine();
+        } catch (e) {
+            console.error(e);
+            setError("Connection failed. Please check your internet.");
+        } finally {
+            setLoading(false);
+        }
     }, [user, isPaid]);
+
+    useEffect(() => {
+        fetchRoutine();
+    }, [fetchRoutine]);
 
     const toggleStep = (key: string) => {
         setExpandedSteps(prev => ({ ...prev, [key]: !prev[key] }));
@@ -129,6 +134,34 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
         );
     }
 
+    if (error) {
+        return (
+            <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-4 text-rose-500 border border-rose-100 shadow-sm">
+                    <AlertCircle size={32} />
+                </div>
+                <h2 className="text-xl font-black text-zinc-900 mb-2">Analysis Interrupted</h2>
+                <p className="text-zinc-500 text-sm mb-8 leading-relaxed max-w-xs mx-auto">
+                    {error} <br/> Don't worry, your credits are safe.
+                </p>
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <button 
+                        onClick={fetchRoutine}
+                        className="w-full py-4 bg-zinc-900 text-white rounded-[1.5rem] font-bold text-sm hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-zinc-900/10"
+                    >
+                        <RotateCw size={16} /> Try Again
+                    </button>
+                    <button 
+                        onClick={onBack}
+                        className="w-full py-4 bg-zinc-50 text-zinc-600 rounded-[1.5rem] font-bold text-sm hover:bg-zinc-100 transition-all"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
     const currentSteps = routine ? routine[activeTab.toLowerCase() as 'am' | 'pm'] : [];
 
     return (
@@ -173,66 +206,74 @@ const PremiumRoutineBuilder: React.FC<PremiumRoutineBuilderProps> = ({ user, onB
 
             {/* CONTENT */}
             <div className="px-6 pt-8 space-y-6">
-                {currentSteps.map((step, idx) => {
-                    const stepKey = `${activeTab}-${idx}`;
-                    const isExpanded = expandedSteps[stepKey];
+                {currentSteps.length === 0 ? (
+                    <div className="p-8 text-center text-zinc-400">
+                        <p>No steps found for this routine.</p>
+                    </div>
+                ) : (
+                    currentSteps.map((step, idx) => {
+                        const stepKey = `${activeTab}-${idx}`;
+                        const isExpanded = expandedSteps[stepKey];
 
-                    return (
-                        <div key={idx} className="border-b border-zinc-100 last:border-0 pb-6 last:pb-0">
-                            <button 
-                                onClick={() => toggleStep(stepKey)}
-                                className="w-full flex items-center justify-between py-2 mb-2 group"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-bold text-xs border border-zinc-200 group-hover:bg-teal-50 group-hover:text-teal-600 group-hover:border-teal-100 transition-colors">
-                                        {idx + 1}
-                                    </div>
-                                    <h3 className="text-lg font-black text-zinc-900 uppercase tracking-tight group-hover:text-teal-600 transition-colors">{step.step}</h3>
-                                </div>
-                                <ChevronDown size={20} className={`text-zinc-300 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {isExpanded && (
-                                <div className="grid gap-4 mt-4 animate-in slide-in-from-top-4 duration-300">
-                                    {step.products.map((prod, pIdx) => (
-                                        <div key={pIdx} className={`p-5 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-lg ${getTierColor(prod.tier)} bg-opacity-30 border-opacity-50 relative group/card`}>
-                                            <div className="absolute top-4 right-4">
-                                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest bg-white bg-opacity-60 backdrop-blur-sm border border-black/5 shadow-sm`}>
-                                                    {getTierIcon(prod.tier)} {getTierLabel(prod.tier)}
-                                                </span>
-                                            </div>
-
-                                            <div className="pr-16">
-                                                <h4 className="font-bold text-zinc-900 text-base leading-tight mb-1">{prod.name}</h4>
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">{prod.brand}</p>
-                                            </div>
-
-                                            <p className="text-xs text-zinc-600 font-medium leading-relaxed mb-4">
-                                                {prod.reason}
-                                            </p>
-
-                                            <div className="flex items-center justify-between pt-3 border-t border-black/5">
-                                                 <div className="flex items-center gap-1 text-zinc-900 font-bold">
-                                                     <span className="text-sm">{prod.price}</span>
-                                                 </div>
-                                                 <div className="flex items-center gap-1.5">
-                                                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100/50 px-1.5 py-0.5 rounded border border-emerald-100">{prod.rating}% Match</span>
-                                                 </div>
-                                            </div>
+                        return (
+                            <div key={idx} className="border-b border-zinc-100 last:border-0 pb-6 last:pb-0">
+                                <button 
+                                    onClick={() => toggleStep(stepKey)}
+                                    className="w-full flex items-center justify-between py-2 mb-2 group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-500 flex items-center justify-center font-bold text-xs border border-zinc-200 group-hover:bg-teal-50 group-hover:text-teal-600 group-hover:border-teal-100 transition-colors">
+                                            {idx + 1}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
+                                        <h3 className="text-lg font-black text-zinc-900 uppercase tracking-tight group-hover:text-teal-600 transition-colors">{step.step}</h3>
+                                    </div>
+                                    <ChevronDown size={20} className={`text-zinc-300 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                </button>
 
-                <div className="p-6 bg-zinc-50 rounded-[2rem] text-center border border-zinc-100 mt-8">
-                    <Sparkles className="w-8 h-8 text-teal-500 mx-auto mb-3" />
-                    <p className="text-xs text-zinc-500 leading-relaxed font-medium">
-                        These recommendations are generated based on your unique skin metrics and analysis.
-                    </p>
-                </div>
+                                {isExpanded && (
+                                    <div className="grid gap-4 mt-4 animate-in slide-in-from-top-4 duration-300">
+                                        {step.products.map((prod, pIdx) => (
+                                            <div key={pIdx} className={`p-5 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-lg ${getTierColor(prod.tier)} bg-opacity-30 border-opacity-50 relative group/card`}>
+                                                <div className="absolute top-4 right-4">
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest bg-white bg-opacity-60 backdrop-blur-sm border border-black/5 shadow-sm`}>
+                                                        {getTierIcon(prod.tier)} {getTierLabel(prod.tier)}
+                                                    </span>
+                                                </div>
+
+                                                <div className="pr-16">
+                                                    <h4 className="font-bold text-zinc-900 text-base leading-tight mb-1">{prod.name}</h4>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">{prod.brand}</p>
+                                                </div>
+
+                                                <p className="text-xs text-zinc-600 font-medium leading-relaxed mb-4">
+                                                    {prod.reason}
+                                                </p>
+
+                                                <div className="flex items-center justify-between pt-3 border-t border-black/5">
+                                                     <div className="flex items-center gap-1 text-zinc-900 font-bold">
+                                                         <span className="text-sm">{prod.price}</span>
+                                                     </div>
+                                                     <div className="flex items-center gap-1.5">
+                                                         <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100/50 px-1.5 py-0.5 rounded border border-emerald-100">{prod.rating}% Match</span>
+                                                     </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
+
+                {currentSteps.length > 0 && (
+                    <div className="p-6 bg-zinc-50 rounded-[2rem] text-center border border-zinc-100 mt-8">
+                        <Sparkles className="w-8 h-8 text-teal-500 mx-auto mb-3" />
+                        <p className="text-xs text-zinc-500 leading-relaxed font-medium">
+                            These recommendations are generated based on your unique skin metrics and analysis.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );
