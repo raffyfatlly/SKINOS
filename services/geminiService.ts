@@ -5,6 +5,10 @@ import { trackEvent, estimateTokens } from './analyticsService';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// --- CONFIGURATION ---
+// CHANGE THIS STRING to 'gemini-3.0-flash' (or specific version) when ready to upgrade
+const MODEL_NAME = 'gemini-2.5-flash';
+
 // Helpers
 const parseJSONFromText = (text: string): any => {
     try {
@@ -93,7 +97,7 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
         `;
         
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: MODEL_NAME,
             contents: prompt,
             config: { responseMimeType: 'application/json' }
         });
@@ -108,23 +112,33 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
 
 export const analyzeFaceSkin = async (image: string, localMetrics: SkinMetrics, history?: SkinMetrics[]): Promise<SkinMetrics> => {
     return runWithRetry<SkinMetrics>(async (ai) => {
+        // Construct history context string
+        let historyContext = "No previous scan history.";
+        if (history && history.length > 0) {
+            const prev = history[history.length - 1]; // Get most recent
+            historyContext = `PREVIOUS SCAN (${new Date(prev.timestamp).toLocaleDateString()}): Score ${prev.overallScore}, Acne ${prev.acneActive}, Hydration ${prev.hydration}, Redness ${prev.redness}.`;
+        }
+
         const prompt = `Analyze this face image for dermatological metrics. 
         The provided image may have lighting variances.
         Current computer-vision estimates (for reference only): ${JSON.stringify(localMetrics)}.
         
+        PATIENT HISTORY: ${historyContext}
+        
         TASK:
-        1. Ignore the provided metrics if they contradict visible skin condition.
+        1. Ignore the provided CV metrics if they contradict visible skin condition.
         2. Calibrate scoring to avoid extreme outliers:
            - 90-100: Clinical perfection / Glass Skin.
            - 75-89: Healthy, minor imperfections (Normal).
            - 50-74: Visible issues needing routine adjustment.
            - <50: Significant dermatological concerns.
-        3. Output robust, realistic scores.
+        3. **CONTEXT AWARENESS**: If a previous scan exists, briefly mention significant changes (e.g., "Redness has visibly improved") in the 'analysisSummary'.
+        4. Output robust, realistic scores.
 
         Return JSON with fields: overallScore, acneActive, acneScars, poreSize, blackheads, wrinkleFine, wrinkleDeep, sagging, pigmentation, redness, texture, hydration, oiliness, darkCircles, skinAge, analysisSummary (string), observations (map of metric key to string observation).`;
         
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: MODEL_NAME,
             contents: {
                 parts: [
                     { inlineData: { mimeType: 'image/jpeg', data: image.split(',')[1] } },
@@ -180,7 +194,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
         `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: MODEL_NAME,
             contents: prompt,
             config: {
                  responseMimeType: 'application/json'
@@ -252,7 +266,7 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
         `;
 
         const visionResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: MODEL_NAME,
             contents: {
                 parts: [
                     { inlineData: { mimeType: 'image/jpeg', data: base64.split(',')[1] } },
@@ -312,7 +326,7 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
         `;
 
         const finalResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: MODEL_NAME,
             contents: refinementPrompt,
             config: { responseMimeType: 'application/json' }
         });
@@ -453,7 +467,7 @@ export const createDermatologistSession = (user: UserProfile, shelf: Product[]):
     // UPDATED: CHANGED EVENT NAME TO BE MORE CLINICAL
     trackEvent('ACTION', 'AI_DERM_CONSULT', { shelfSize: shelf.length });
     return ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: MODEL_NAME,
         config: {
              systemInstruction: `You are a helpful dermatologist. User metrics: ${JSON.stringify(user.biometrics)}. Shelf: ${JSON.stringify(shelf.map(p => p.name))}.`
         }
@@ -548,7 +562,7 @@ export const generateRoutineRecommendations = async (user: UserProfile): Promise
         `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: MODEL_NAME,
             contents: prompt,
             config: { responseMimeType: 'application/json' }
         });
