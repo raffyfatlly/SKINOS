@@ -122,8 +122,8 @@ const SaveProfileModal: React.FC<SaveProfileModalProps> = ({ onSave, onClose, on
       switch (trigger) {
           case 'SCAN_PRODUCT':
               return {
-                  title: "Unlock Smart Search",
-                  desc: <>Search any product from our global database. <strong className="text-zinc-900 font-bold">Create a free account</strong> to analyze ingredients and save matches.</>,
+                  title: "Unlock Smart Scan",
+                  desc: <>Scan any product from our global database. <strong className="text-zinc-900 font-bold">Create a free account</strong> to analyze ingredients and save matches.</>,
                   icon: ScanBarcode
               };
           case 'RESCAN_FACE':

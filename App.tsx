@@ -31,7 +31,7 @@ import BetaOfferModal from './components/BetaOfferModal';
 import AdminDashboard from './components/AdminDashboard'; 
 
 // Icons
-import { ScanFace, LayoutGrid, User, Search, Home, Loader } from 'lucide-react';
+import { ScanFace, LayoutGrid, User, Search, Home, Loader, X } from 'lucide-react';
 
 const ADMIN_EMAILS = ['admin@skinos.ai', 'raf@admin.com'];
 
@@ -61,6 +61,9 @@ const App: React.FC = () => {
 
   // Premium Offer Modal State
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Guide State
+  const [showScanGuide, setShowScanGuide] = useState(false);
 
   const [notification, setNotification] = useState<{ type: NotificationType, title: string, description: string, actionLabel: string, onAction: () => void } | null>(null);
   const [aiQuery, setAiQuery] = useState<string | null>(null);
@@ -294,6 +297,9 @@ const App: React.FC = () => {
 
       persistState(updatedUser, shelf);
       setCurrentView(AppView.DASHBOARD);
+      
+      // SHOW GUIDE AFTER SCORE (With small delay for impact)
+      setTimeout(() => setShowScanGuide(true), 1000);
   };
 
   // Called by Scanner/Search when a product is found
@@ -388,8 +394,33 @@ const App: React.FC = () => {
               </button>
 
               <div className="relative -top-8">
+                  {/* GUIDE BUBBLE */}
+                  {showScanGuide && currentView === AppView.DASHBOARD && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 z-50 animate-in slide-in-from-bottom-2 fade-in duration-500">
+                          <div className="bg-white p-4 rounded-2xl shadow-xl border border-teal-100 relative text-center">
+                              <button 
+                                  onClick={(e) => { e.stopPropagation(); setShowScanGuide(false); }}
+                                  className="absolute -top-2 -right-2 bg-zinc-100 text-zinc-400 hover:text-zinc-600 rounded-full p-1 border border-zinc-200 shadow-sm transition-colors"
+                              >
+                                  <X size={12} />
+                              </button>
+                              
+                              <p className="text-[10px] font-bold text-teal-600 uppercase tracking-widest mb-1">Check Compatibility</p>
+                              <p className="text-xs font-medium text-zinc-600 leading-tight">
+                                  Scan any product to see your match score.
+                              </p>
+
+                              {/* Triangle */}
+                              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rotate-45 border-b border-r border-teal-100"></div>
+                          </div>
+                      </div>
+                  )}
+
                   <button 
-                    onClick={() => handleNavClick(AppView.PRODUCT_SCANNER)}
+                    onClick={() => {
+                        setShowScanGuide(false);
+                        handleNavClick(AppView.PRODUCT_SCANNER);
+                    }}
                     className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-teal-600/30 hover:scale-110 transition-transform active:scale-95"
                   >
                       <ScanFace size={24} />
