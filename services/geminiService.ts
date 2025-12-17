@@ -4,11 +4,11 @@ import { SkinMetrics, Product, UserProfile } from '../types';
 import { trackEvent, estimateTokens } from './analyticsService';
 
 /** 
- * --- GEMINI 3 FLASH ---
- * Model: gemini-3-flash-preview
- * Note: gemini-2.5-flash-preview was causing 404 'Entity not found'.
+ * --- GEMINI 2.5 FLASH ---
+ * Using the specific dated version to resolve 'Entity not found' 404 errors
+ * and ensure connectivity with the latest preview endpoint.
  */
-const MODEL_NAME = 'gemini-3-flash-preview';
+const MODEL_NAME = 'gemini-2.5-flash-preview-09-2025';
 
 const GEMINI_CONFIG = {
     thinkingConfig: { thinkingBudget: 0 }
@@ -59,18 +59,20 @@ const runWithRetry = async <T>(fn: (ai: GoogleGenAI) => Promise<T>, fallback: T,
         return await Promise.race([fn(ai), timeoutPromise]);
     } catch (e: any) {
         const errorMessage = e?.message || String(e);
-        console.error("Gemini API Error Status:", e?.status || 'Unknown');
-        console.error("Gemini API Error Message:", errorMessage);
+        const errorStatus = e?.status || 'Unknown';
         
-        // Handle "Requested entity was not found" by prompting for a new key as per guidelines
-        if (errorMessage.includes("Requested entity was not found.") && (window as any).aistudio) {
-            console.warn("Detected missing entity error. Prompting for API key selection...");
+        console.error(`Gemini API Error [${errorStatus}]:`, errorMessage);
+        
+        // Handle "Requested entity was not found" by prompting for key selection
+        // This is necessary if the specific 2.5 model is restricted for the current key's project
+        if ((errorMessage.includes("Requested entity was not found") || errorStatus === 404) && (window as any).aistudio) {
+            console.warn("Model entity not found. Please select a project key that has access to Gemini 2.5 Flash.");
             (window as any).aistudio.openSelectKey();
         }
 
         trackEvent('ERROR', 'GEMINI_FAILURE', { 
             error: errorMessage,
-            status: e?.status 
+            status: errorStatus 
         });
         
         return fallback;

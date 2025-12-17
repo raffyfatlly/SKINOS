@@ -10,6 +10,10 @@ export const validateFrame = (
   height: number,
   lastFacePos?: { cx: number, cy: number }
 ): { isGood: boolean; message: string; facePos?: { cx: number, cy: number }; instruction?: string; status: 'OK' | 'WARNING' | 'ERROR' } => {
+  if (width <= 0 || height <= 0) {
+      return { isGood: false, message: "Initializing", instruction: "Wait...", status: 'ERROR' };
+  }
+
   const { cx, cy, faceWidth } = detectFaceBounds(ctx, width, height);
   
   let status: 'OK' | 'WARNING' | 'ERROR' = 'OK';
@@ -122,6 +126,7 @@ const labToRgb = (L: number, a: number, b: number) => {
 function calculateAcneScore(img: ImageData): number {
     let acnePixels = 0;
     const totalPixels = img.width * img.height;
+    if (totalPixels <= 0) return 99;
     const data = img.data;
 
     // Calculate baseline stats
@@ -242,7 +247,7 @@ function calculateWrinkleScore(img: ImageData): number {
         }
     }
 
-    const density = edgePixels / (w * h);
+    const density = edgePixels / (w * h || 1);
     // Relaxed penalty
     return Math.max(20, 100 - (density * 300));
 }
@@ -251,6 +256,7 @@ function calculateWrinkleScore(img: ImageData): number {
 function calculateHydrationScore(img: ImageData): number {
     let glowPixels = 0;
     const total = img.data.length / 4;
+    if (total <= 0) return 99;
     
     for (let i = 0; i < img.data.length; i += 4) {
         const r = img.data[i], g = img.data[i+1], b = img.data[i+2];
@@ -277,8 +283,10 @@ function calculateHydrationScore(img: ImageData): number {
 function calculateDarkCircleScore(eyeImg: ImageData, cheekImg: ImageData): number {
     const getAvgLuma = (d: ImageData) => {
         let s = 0;
+        const total = d.data.length / 4;
+        if (total <= 0) return 128;
         for(let i=0; i<d.data.length; i+=4) s += (0.299*d.data[i] + 0.587*d.data[i+1] + 0.114*d.data[i+2]);
-        return s / (d.data.length/4);
+        return s / total;
     }
     
     const eyeL = getAvgLuma(eyeImg);
@@ -298,6 +306,7 @@ export const preprocessForAI = (
     width: number,
     height: number
 ): string => {
+    if (width <= 0 || height <= 0) return '';
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
     const len = data.length;
@@ -306,7 +315,7 @@ export const preprocessForAI = (
     for (let i = 0; i < len; i += 16) { 
         sumLuma += (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
     }
-    const avgLuma = sumLuma / (len / 16);
+    const avgLuma = sumLuma / (len / 16 || 1);
     
     const exposureBias = 128 - avgLuma; 
     const contrast = 1.15; 
@@ -343,6 +352,7 @@ export const applyMedicalProcessing = (
     width: number,
     height: number
 ) => {
+    if (width <= 0 || height <= 0) return;
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
     
@@ -362,6 +372,7 @@ export const applyClinicalOverlays = (
     width: number,
     height: number
 ) => {
+    if (width <= 0 || height <= 0) return;
     const { cx, cy, faceWidth, faceHeight } = detectFaceBounds(ctx, width, height);
     if (faceWidth === 0) return;
 
@@ -375,7 +386,7 @@ export const applyClinicalOverlays = (
     for (let y = Math.floor(cy - faceHeight * 0.45); y < cy + faceHeight * 0.5; y += scanStep) {
         for (let x = Math.floor(cx - faceWidth * 0.45); x < cx + faceWidth * 0.45; x += scanStep) {
             const i = (y * width + x) * 4;
-            if (data[i+3] === 0) continue;
+            if (i >= data.length || data[i+3] === 0) continue;
             
             const { a } = rgbToLab(data[i], data[i+1], data[i+2]);
             if (a > 20) {
@@ -391,6 +402,7 @@ const isSkinPixel = (r: number, g: number, b: number): boolean => {
 };
 
 const detectFaceBounds = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    if (width <= 0 || height <= 0) return { cx: 0, cy: 0, faceWidth: 0, faceHeight: 0 };
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
     let sumX = 0, sumY = 0, count = 0;
@@ -416,10 +428,20 @@ const detectFaceBounds = (ctx: CanvasRenderingContext2D, width: number, height: 
 };
 
 const getNormalizedROI = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    x = Math.floor(x);
+    y = Math.floor(y);
+    w = Math.floor(w);
+    h = Math.floor(h);
+
     if (x < 0) x = 0; if (y < 0) y = 0;
     w = Math.min(w, ctx.canvas.width - x);
     h = Math.min(h, ctx.canvas.height - y);
     
+    if (w <= 0 || h <= 0) {
+        // Return blank ImageData if dimensions are zero or less
+        return new ImageData(Math.max(1, w), Math.max(1, h));
+    }
+
     const imgData = ctx.getImageData(x, y, w, h);
     return imgData; 
 };
@@ -430,6 +452,7 @@ export const drawBiometricOverlay = (
     height: number,
     metrics: SkinMetrics
 ) => {
+    if (width <= 0 || height <= 0) return;
     const { cx, cy, faceWidth, faceHeight } = detectFaceBounds(ctx, width, height);
     if (faceWidth === 0) return;
 
@@ -474,7 +497,16 @@ export const analyzeSkinFrame = (
   height: number
 ): SkinMetrics => {
   const { cx, cy, faceWidth, faceHeight } = detectFaceBounds(ctx, width, height);
-  const roiSize = Math.floor(faceWidth * 0.25); 
+  
+  if (faceWidth <= 0) {
+      return {
+          overallScore: 0, acneActive: 0, acneScars: 0, poreSize: 0, blackheads: 0,
+          wrinkleFine: 0, wrinkleDeep: 0, sagging: 0, pigmentation: 0, redness: 0,
+          texture: 0, hydration: 0, oiliness: 0, darkCircles: 0, timestamp: Date.now()
+      };
+  }
+
+  const roiSize = Math.max(1, Math.floor(faceWidth * 0.25)); 
 
   // Define Regions of Interest (ROIs)
   const foreheadY = cy - faceHeight * 0.35;
