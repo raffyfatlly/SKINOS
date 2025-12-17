@@ -1,37 +1,18 @@
 
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
-import { SkinMetrics, Product, UserProfile, IngredientRisk, Benefit } from '../types';
+import { SkinMetrics, Product, UserProfile } from '../types';
 import { trackEvent, estimateTokens } from './analyticsService';
 
-// Initialize with the mandatory API Key structure
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /** 
- * --- GEMINI 3 FLASH (DECEMBER 2025 SPECS) ---
+ * --- GEMINI 3 FLASH ---
  * Model: gemini-3-flash-preview
- * Latency: thinkingBudget: 0 (Equivalent to 'low' thinking_level)
+ * Note: gemini-2.5-flash-preview was causing 404 'Entity not found'.
  */
 const MODEL_NAME = 'gemini-3-flash-preview';
 
-// Configuration optimized for sub-second Flash performance
-const GEMINI_3_CONFIG = {
-    // The SDK uses thinkingBudget. 0 disables heavy reasoning for maximum speed.
+const GEMINI_CONFIG = {
     thinkingConfig: { thinkingBudget: 0 }
 };
-
-/**
- * Enhanced interface for Gemini 3 state preservation
- */
-export interface Gemini3Content {
-    role: 'user' | 'model' | 'function';
-    parts: {
-        text?: string;
-        inlineData?: { mimeType: string; data: string };
-        functionCall?: { name: string; args: object };
-        functionResponse?: { name: string; response: object };
-        thoughtSignature?: string; // Mandatory for stateful tool loops in Gemini 3
-    }[];
-}
 
 // --- HELPERS ---
 
@@ -61,17 +42,34 @@ const parseJSONFromText = (text: string): any => {
     }
 };
 
+/**
+ * Standard execution wrapper.
+ * We instantiate GoogleGenAI inside to ensure it picks up the latest environment key.
+ */
 const runWithRetry = async <T>(fn: (ai: GoogleGenAI) => Promise<T>, fallback: T, timeoutMs: number = 30000): Promise<T> => {
     try {
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            console.warn("Gemini API Key missing from process.env.API_KEY");
+            return fallback;
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
         const timeoutPromise = new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs));
         return await Promise.race([fn(ai), timeoutPromise]);
     } catch (e: any) {
-        console.error("Gemini 3 Error Status:", e?.status || 'Unknown');
-        console.error("Gemini 3 Error Message:", e?.message || String(e));
+        const errorMessage = e?.message || String(e);
+        console.error("Gemini API Error Status:", e?.status || 'Unknown');
+        console.error("Gemini API Error Message:", errorMessage);
         
-        // Tracking for Admin Dashboard visibility
+        // Handle "Requested entity was not found" by prompting for a new key as per guidelines
+        if (errorMessage.includes("Requested entity was not found.") && (window as any).aistudio) {
+            console.warn("Detected missing entity error. Prompting for API key selection...");
+            (window as any).aistudio.openSelectKey();
+        }
+
         trackEvent('ERROR', 'GEMINI_FAILURE', { 
-            error: e?.message || String(e),
+            error: errorMessage,
             status: e?.status 
         });
         
@@ -101,7 +99,7 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
             model: MODEL_NAME,
             contents: prompt,
             config: { 
-                ...GEMINI_3_CONFIG,
+                ...GEMINI_CONFIG,
                 responseMimeType: 'application/json' 
             }
         });
@@ -116,7 +114,7 @@ export const searchProducts = async (query: string): Promise<{ name: string, bra
 
 export const analyzeFaceSkin = async (image: string, localMetrics: SkinMetrics, history?: SkinMetrics[]): Promise<SkinMetrics> => {
     return runWithRetry<SkinMetrics>(async (ai) => {
-        const prompt = `Analyze skin from image. Current biometrics: ${JSON.stringify(localMetrics)}. Output full SkinMetrics JSON.`;
+        const prompt = `Analyze skin from image. Current biometrics: ${JSON.stringify(localMetrics)}. Output full SkinMetrics JSON matching the expected schema. Include a specific analysisSummary string field in the response explaining findings.`;
         
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
@@ -127,7 +125,7 @@ export const analyzeFaceSkin = async (image: string, localMetrics: SkinMetrics, 
                 ]
             },
             config: { 
-                ...GEMINI_3_CONFIG,
+                ...GEMINI_CONFIG,
                 responseMimeType: 'application/json'
             }
         });
@@ -142,13 +140,13 @@ export const analyzeFaceSkin = async (image: string, localMetrics: SkinMetrics, 
 
 export const analyzeProductFromSearch = async (productName: string, userMetrics: SkinMetrics, consistencyScore?: number, knownBrand?: string): Promise<Product> => {
     return runWithRetry<Product>(async (ai) => {
-        const prompt = `Analyze "${productName}" for skin: ${JSON.stringify(userMetrics)}. Output Product JSON.`;
+        const prompt = `Analyze the skincare product "${productName}" (Brand: ${knownBrand || 'Unknown'}). Consider user skin metrics: ${JSON.stringify(userMetrics)}. Output a JSON object following the Product schema with risks (IngredientRisk[]) and benefits (Benefit[]).`;
 
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
             contents: prompt,
             config: {
-                 ...GEMINI_3_CONFIG,
+                 ...GEMINI_CONFIG,
                  responseMimeType: 'application/json'
             }
         });
@@ -174,7 +172,7 @@ export const analyzeProductFromSearch = async (productName: string, userMetrics:
 
 export const analyzeProductImage = async (base64: string, userMetrics: SkinMetrics): Promise<Product> => {
     return runWithRetry<Product>(async (ai) => {
-        const visionPrompt = `Identify product and ingredients from image. Output Product JSON.`;
+        const visionPrompt = `Identify product name, brand, and ingredients from this image. Evaluate suitability for user metrics: ${JSON.stringify(userMetrics)}. Output Product JSON.`;
 
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
@@ -185,7 +183,7 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
                 ]
             },
             config: { 
-                ...GEMINI_3_CONFIG,
+                ...GEMINI_CONFIG,
                 responseMimeType: 'application/json' 
             }
         });
@@ -208,12 +206,14 @@ export const analyzeProductImage = async (base64: string, userMetrics: SkinMetri
 };
 
 export const createDermatologistSession = (user: UserProfile, shelf: Product[]): Chat => {
+    const apiKey = process.env.API_KEY || '';
+    const ai = new GoogleGenAI({ apiKey });
     trackEvent('ACTION', 'AI_DERM_CONSULT', { shelfSize: shelf.length });
     return ai.chats.create({
         model: MODEL_NAME,
         config: {
-             ...GEMINI_3_CONFIG,
-             systemInstruction: `You are an expert dermatologist. User metrics: ${JSON.stringify(user.biometrics)}. Shelf: ${JSON.stringify(shelf.map(p => p.name))}.`
+             ...GEMINI_CONFIG,
+             systemInstruction: `You are an expert clinical dermatologist. User metrics: ${JSON.stringify(user.biometrics)}. Current Shelf: ${JSON.stringify(shelf.map(p => ({ name: p.name, ingredients: p.ingredients })))}. Provide concise, clinical advice.`
         }
     });
 };
@@ -292,12 +292,15 @@ export const getBuyingDecision = (product: Product, shelf: Product[], user: User
 
 export const generateRoutineRecommendations = async (user: UserProfile): Promise<any> => {
     return runWithRetry<any>(async (ai) => {
-        const prompt = `Generate AM/PM routine for: ${JSON.stringify(user.biometrics)}. Output JSON.`;
+        const prompt = `Generate a personalized AM/PM routine for a user with these skin biometrics: ${JSON.stringify(user.biometrics)}. 
+        Include exactly 3 product options (Budget, Value, Luxury) for each step. 
+        Output format: JSON matching { am: [{ step: string, products: [{ name, brand, tier, price, reason, rating }] }], pm: [...] }`;
+        
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
             contents: prompt,
             config: { 
-                ...GEMINI_3_CONFIG,
+                ...GEMINI_CONFIG,
                 responseMimeType: 'application/json' 
             }
         });
